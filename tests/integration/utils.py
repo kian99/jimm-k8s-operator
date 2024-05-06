@@ -56,7 +56,8 @@ async def deploy_jimm(ops_test: OpsTest, local_charm: bool) -> JimmEnv:
         charm = Path(utils.get_local_charm()).resolve()
     else:
         charm = await ops_test.build_charm(".")
-    resources = {"jimm-image": "localhost:32000/jimm:latest"}
+    jimm_image_path = METADATA["resources"]["jimm-image"]["upstream-source"]
+    resources = {"jimm-image": jimm_image_path}
 
     jimm_address = ParseResult(scheme="http", netloc="test.jimm.localhost", path="", params="", query="", fragment="")
     # Instantiating the ExternalIdpManager object deploys the external identity provider.

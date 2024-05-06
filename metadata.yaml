@@ -78,7 +78,8 @@ resources:
   jimm-image:
     type: oci-image
     description: OCI image for JIMM.
-    upstream-source: jimm:latest
+    # Update the below to a fixed version of JIMM once a stable release with OIDC is out.
+    upstream-source: ghcr.io/canonical/jimm:feature-oidc
   promtail-bin:
     type: file
     description: Promtail binary for logging
