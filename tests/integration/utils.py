@@ -134,7 +134,7 @@ async def deploy_jimm(ops_test: OpsTest, local_charm: bool) -> JimmEnv:
 
     logger.info("running the create authorization model action")
     jimm_unit = await utils.get_unit_by_name(APP_NAME, "0", ops_test.model.units)
-    with open("../../local/openfga/authorisation_model.json", "r") as model_file:
+    with open("authorisation_model.json", "r") as model_file:
         model_data = model_file.read()
         for i in range(10):
             action: Action = await jimm_unit.run_action(
