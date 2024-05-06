@@ -40,8 +40,6 @@ jobs:
     needs:
       - charm-build
     runs-on: ubuntu-latest
-    env:
-      charm-type: "jimm-k8s"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
