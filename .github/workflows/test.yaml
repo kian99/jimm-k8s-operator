@@ -6,7 +6,7 @@ on:
 
 jobs:
   charm-build:
-    uses: ./.github/workflows/charm-build.yaml
+    uses: ./.github/workflows/build.yaml
 
   lint:
     name: Lint

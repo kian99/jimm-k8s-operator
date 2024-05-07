@@ -7,12 +7,12 @@ on:
       - v3
 
 # Note this workflow requires a Github secret to provide auth against charmhub.
-# This can be generated with the following command
-# charmcraft login --export=secrets.auth --charm=juju-jimm-k8s --permission=package-manage --permission=package-view --channel=3/edge --ttl=999999999
+# This can be generated with the following command (ttl=6 months)
+# charmcraft login --export=secrets.auth --charm=juju-jimm-k8s --permission=package-manage --permission=package-view --ttl=15552000
 
 jobs:
   charm-tests:
-    uses: ./.github/workflows/charm-test.yaml
+    uses: ./.github/workflows/test.yaml
 
   release-charm:
     name: Release charm
