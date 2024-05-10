@@ -88,7 +88,7 @@ PROMETHEUS_PORT = 8080
 OAUTH = "oauth"
 OAUTH_SCOPES = "openid profile email offline_access"
 # TODO: Add "device_code" below once the charm interface supports it.
-OAUTH_GRANT_TYPES = ["authorization_code", "refresh_token"]
+OAUTH_GRANT_TYPES = ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"]
 VAULT_NONCE_SECRET_LABEL = "nonce"
 # Template for storing trusted certificate in a file.
 TRUSTED_CA_TEMPLATE = string.Template("/usr/local/share/ca-certificates/trusted-ca-cert-$rel_id-ca.crt")

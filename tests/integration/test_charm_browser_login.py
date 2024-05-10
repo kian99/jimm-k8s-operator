@@ -2,8 +2,10 @@
 # Copyright 2022 Canonical Ltd
 # See LICENSE file for licensing details.
 
+import collections
 import logging
 import os
+from unittest.mock import patch
 
 import pytest
 import requests
@@ -23,6 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.mark.abort_on_fail
+@patch(
+    "oauth_tools.oauth_test_helper.IDENTITY_BUNDLE",
+    collections.namedtuple("IDENTITY_BUNDLE", ["NAME", "CHANNEL"])(
+        NAME="identity-platform",
+        CHANNEL="0.2/edge",
+    ),
+)
 async def test_jimm_oauth_browser_login(ops_test: OpsTest, local_charm, page: Page, context: BrowserContext):
     """Build the charm-under-test and deploy it together with related charms.
 
