@@ -699,9 +699,10 @@ class JimmOperatorCharm(CharmBase):
             dns = "http://localhost"
         dns = ensureFQDN(dns)
         return ClientConfig(
-            urljoin(dns, "/auth/callback"),
-            OAUTH_SCOPES,
-            OAUTH_GRANT_TYPES,
+            redirect_uri=urljoin(dns, "/auth/callback"),
+            scope=OAUTH_SCOPES,
+            grant_types=OAUTH_GRANT_TYPES,
+            token_endpoint_auth_method="client_secret_post"
         )
 
     def get_vault_nonce(self) -> str:
