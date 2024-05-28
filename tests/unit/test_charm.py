@@ -38,7 +38,6 @@ MINIMAL_CONFIG = {
     "dns-name": "jimm.localhost",
     "public-key": "izcYsQy3TePp6bLjqOo3IRPFvkQd2IKtyODGqC6SdFk=",
     "private-key": "ly/dzsI9Nt/4JxUILQeAX79qZ4mygDiuYGqc2ZEiDEc=",
-    "final-redirect-url": "some-url",
 }
 
 BASE_ENV = {
@@ -60,7 +59,7 @@ BASE_ENV = {
     "JIMM_OAUTH_CLIENT_ID": OAUTH_CLIENT_ID,
     "JIMM_OAUTH_CLIENT_SECRET": OAUTH_CLIENT_SECRET,
     "JIMM_OAUTH_SCOPES": OAUTH_PROVIDER_INFO["scope"],
-    "JIMM_DASHBOARD_FINAL_REDIRECT_URL": "some-url",
+    "JIMM_DASHBOARD_FINAL_REDIRECT_URL": "https://jaas.ai/models",
     "JIMM_SECURE_SESSION_COOKIES": True,
     "JIMM_SESSION_COOKIE_MAX_AGE": 86400,
 }
@@ -307,6 +306,27 @@ class TestCharm(TestCase):
         expected_env = BASE_ENV.copy()
         expected_env.update({"INSECURE_SECRET_STORAGE": "enabled"})
         self.assertEqual(plan.to_dict(), get_expected_plan(expected_env))
+
+    def test_dashboard_config(self):
+        self.harness.enable_hooks()
+        self.add_vault_relation()
+        self.harness.update_config(
+            {
+                **MINIMAL_CONFIG,
+                "juju-dashboard-location": "https://some.host",
+            }
+        )
+        container = self.harness.model.unit.get_container("jimm")
+        self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        self.assertDictContainsSubset(
+            {
+                "JIMM_DASHBOARD_LOCATION": "https://some.host",
+                "JIMM_DASHBOARD_FINAL_REDIRECT_URL": "https://some.host",
+            },
+            plan.to_dict()["services"]["jimm"]["environment"],
+        )
 
     def test_app_dns_address(self):
         self.harness.update_config(MINIMAL_CONFIG)
