@@ -308,6 +308,7 @@ class TestCharm(TestCase):
         self.assertEqual(plan.to_dict(), get_expected_plan(expected_env))
 
     def test_dashboard_config(self):
+        self.create_auth_model_info()
         self.harness.enable_hooks()
         self.add_vault_relation()
         self.harness.update_config(
@@ -320,12 +321,13 @@ class TestCharm(TestCase):
         self.harness.charm.on.jimm_pebble_ready.emit(container)
 
         plan = self.harness.get_container_pebble_plan("jimm")
-        self.assertDictContainsSubset(
-            {
-                "JIMM_DASHBOARD_LOCATION": "https://some.host",
-                "JIMM_DASHBOARD_FINAL_REDIRECT_URL": "https://some.host",
-            },
+        expected_values = {
+            "JIMM_DASHBOARD_LOCATION": "https://some.host",
+            "JIMM_DASHBOARD_FINAL_REDIRECT_URL": "https://some.host",
+        }
+        self.assertDictEqual(
             plan.to_dict()["services"]["jimm"]["environment"],
+            plan.to_dict()["services"]["jimm"]["environment"] | expected_values,
         )
 
     def test_app_dns_address(self):
