@@ -5,6 +5,7 @@
 
 
 import json
+import os
 import pathlib
 import tempfile
 from unittest import TestCase, mock
@@ -306,6 +307,30 @@ class TestCharm(TestCase):
         expected_env = BASE_ENV.copy()
         expected_env.update({"INSECURE_SECRET_STORAGE": "enabled"})
         self.assertEqual(plan.to_dict(), get_expected_plan(expected_env))
+
+    def test_proxy_settings(
+        self,
+    ):
+        os.environ["JUJU_CHARM_NO_PROXY"] = "no-proxy.canonincal.com"
+        os.environ["JUJU_CHARM_HTTP_PROXY"] = "http-proxy.canonincal.com"
+        os.environ["JUJU_CHARM_HTTPS_PROXY"] = "https-proxy.canonincal.com"
+        self.create_auth_model_info()
+        self.harness.update_config(MINIMAL_CONFIG)
+        self.harness.update_config({"postgres-secret-storage": True})
+        container = self.harness.model.unit.get_container("jimm")
+        self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        expected_env = BASE_ENV.copy()
+        expected_env.update({"INSECURE_SECRET_STORAGE": "enabled"})
+        expected_env.update({"NO_PROXY": "no-proxy.canonincal.com"})
+        expected_env.update({"HTTP_PROXY": "http-proxy.canonincal.com"})
+        expected_env.update({"HTTPS_PROXY": "https-proxy.canonincal.com"})
+        self.assertEqual(plan.to_dict(), get_expected_plan(expected_env))
+
+        os.environ["JUJU_CHARM_NO_PROXY"] = ""
+        os.environ["JUJU_CHARM_HTTP_PROXY"] = ""
+        os.environ["JUJU_CHARM_HTTPS_PROXY"] = ""
 
     def test_dashboard_config(self):
         self.create_auth_model_info()

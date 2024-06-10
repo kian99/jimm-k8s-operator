@@ -5,6 +5,7 @@
 import hashlib
 import json
 import logging
+import os
 import secrets
 import string
 from urllib.parse import urljoin, urlparse
@@ -319,6 +320,9 @@ class JimmOperatorCharm(CharmBase):
             "JIMM_DASHBOARD_FINAL_REDIRECT_URL": self.config.get("juju-dashboard-location"),
             "JIMM_SECURE_SESSION_COOKIES": self.config.get("secure-session-cookies"),
             "JIMM_SESSION_COOKIE_MAX_AGE": self.config.get("session-cookie-max-age"),
+            "NO_PROXY": os.environ.get("JUJU_CHARM_NO_PROXY"),
+            "HTTP_PROXY": os.environ.get("JUJU_CHARM_HTTP_PROXY"),
+            "HTTPS_PROXY": os.environ.get("JUJU_CHARM_HTTPS_PROXY"),
         }
         if self._state.dsn:
             config_values["JIMM_DSN"] = self._state.dsn
