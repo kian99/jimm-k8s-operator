@@ -317,6 +317,7 @@ class JimmOperatorCharm(CharmBase):
             return
 
         config_values = {
+            "CORS_ALLOWED_ORIGINS": self.config.get("cors-allowed-origins"),
             "JIMM_AUDIT_LOG_RETENTION_PERIOD_IN_DAYS": self.config.get("audit-log-retention-period-in-days", ""),
             "JIMM_ADMINS": self.config.get("controller-admins", ""),
             "JIMM_DNS_NAME": dns_name,
@@ -491,8 +492,8 @@ class JimmOperatorCharm(CharmBase):
         binding = self.model.get_binding("vault-kv")
         if binding is not None:
             try:
-                egress_subnet = self._egress_subnet(binding)
-                self.vault.request_credentials(event.relation, egress_subnet, self.get_vault_nonce())
+                egress_subnets = self._egress_subnets(binding)
+                self.vault.request_credentials(event.relation, egress_subnets, self.get_vault_nonce())
             except Exception as e:
                 logger.warning(f"failed to update vault relation - {repr(e)}")
 
@@ -562,8 +563,8 @@ class JimmOperatorCharm(CharmBase):
 
     def _on_vault_connected(self, event: vault_kv.VaultKvConnectedEvent):
         relation = self.model.get_relation(event.relation_name, event.relation_id)
-        egress_subnet = self._egress_subnet(self.model.get_binding(relation))
-        self.vault.request_credentials(relation, egress_subnet, self.get_vault_nonce())
+        egress_subnets = self._egress_subnets(self.model.get_binding(relation))
+        self.vault.request_credentials(relation, egress_subnets, self.get_vault_nonce())
 
     def _on_vault_ready(self, event: vault_kv.VaultKvReadyEvent) -> None:
         self._update_workload(event)
@@ -770,7 +771,7 @@ class JimmOperatorCharm(CharmBase):
 
     def get_vault_nonce(self) -> str:
         secret = self.model.get_secret(label=VAULT_NONCE_SECRET_LABEL)
-        nonce = secret.get_content()["nonce"]
+        nonce = secret.get_content(refresh=True)["nonce"]
         return nonce
 
     def _update_trusted_ca_certs(self, container: Container) -> bool:
@@ -822,12 +823,16 @@ class JimmOperatorCharm(CharmBase):
         container.remove_path(cert_path, recursive=True)
         self._update_workload(event)
 
-    def _egress_subnet(self, binding: Binding | None) -> str:
-        if self.config.get("egress-subnet"):
-            return self.config.get("egress-subnet")
+    def _egress_subnets(self, binding: Binding | None) -> list[str]:
         if binding:
-            return str(binding.network.interfaces[0].subnet)
-        raise ValueError("unknown egress ip")
+            # Here we capture the subnets that other units will see the charm connecting from
+            # and can be modified by setting the --via flag when performing relations.
+            subnets = [str(subnet) for subnet in binding.network.egress_subnets[0].subnets()]
+            # This additional subnet is the subnet of the current charm network, useful when
+            # connection to Vault deployed in the same k8s cluster as JIMM.
+            subnets.append(str(binding.network.interfaces[0].subnet))
+            return subnets
+        raise ValueError("unknown egress subnet")
 
 
 def new_session_key():

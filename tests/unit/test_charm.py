@@ -590,13 +590,23 @@ class TestCharm(TestCase):
         del expected_plan["services"][JIMM_SERVICE_NAME]["environment"]["JIMM_IS_LEADER"]
         self.assertEqual(plan.to_dict(), expected_plan)
 
-    def test_egress_subnet_via_config(self):
-        self.harness.update_config({"egress-subnet": "10.0.0.0/8"})
-        res = self.harness.charm._egress_subnet(None)
-        self.assertEqual(res, "10.0.0.0/8")
-
     def test_egress_subnet_via_binding(self):
         binding = self.harness.charm.model.get_binding("peer")
-        res = self.harness.charm._egress_subnet(binding)
+        subnets = self.harness.charm._egress_subnets(binding)
         # Perform a regex match that the result is an IP address
-        self.assertRegexpMatches(res, r"^([0-9]{1,3}\.){3}[0-9]{1,3}($|/(16|24))$")
+        self.assertGreaterEqual(len(subnets), 1)
+        for subnet in subnets:
+            self.assertRegexpMatches(subnet, r"^([0-9]{1,3}\.){3}[0-9]{1,3}($|/(\d{2}))$")
+
+    def test_cors_allowed_origins(self):
+        self.use_fake_session_secret()
+        self.create_auth_model_info()
+        self.harness.enable_hooks()
+        self.add_vault_relation()
+
+        self.harness.update_config(MINIMAL_CONFIG)
+        self.harness.update_config({"cors-allowed-origins": "http://test.localhost"})
+        plan = self.harness.get_container_pebble_plan("jimm")
+        expected_env = EXPECTED_VAULT_ENV.copy()
+        expected_env.update({"CORS_ALLOWED_ORIGINS": "http://test.localhost"})
+        self.assertEqual(plan.to_dict(), get_expected_plan(expected_env))
