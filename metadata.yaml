@@ -12,7 +12,7 @@ name: juju-jimm-k8s
 display-name: JIMM-K8s
 
 # (Required)
-summary: Juju Intelligent Model Manager provides a convient way to manage all of your models!
+summary: JIMM (Juju Intelligent Model Manager) provides enterprise functionality for your Juju controllers
 
 maintainers:
   - JAAS Crew (jaas-crew@lists.canonical.com)
@@ -21,8 +21,19 @@ source: https://github.com/canonical/jimm
 issues: https://github.com/canonical/jimm/issues
 
 description: |
-  JIMM is a juju controller, used in conjunction with the JaaS dashboard to provide a seamless way
-  to manage models, regardless of where their controllers reside or what cloud they may be running on.
+  JIMM is a special type of Juju controller, used in conjunction with the Juju dashboard and a suite 
+  of other services to provide greater capabilities to Juju. JIMM acts as an authorization gateway 
+  and central access point for your Juju controllers.
+  
+  Some of the features that JIMM enables include:
+   - A seamless way to manage models on various controllers, 
+   - Fine grained access control
+   - Federated login via OIDC.
+
+  JIMM is just one component in a suite of tools that enables these features. When deployed as a whole
+  we refer to this setup as JAAS (Juju As A Service).
+
+  Visit the JAAS docs at https://canonical-jaas-documentation.readthedocs-hosted.com/en/latest/
 
 peers:
   peer:
