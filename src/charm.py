@@ -295,6 +295,7 @@ class JimmOperatorCharm(CharmBase):
         if not self.oauth.is_client_created():
             logger.warning("OAuth relation is not ready yet")
             self.unit.status = BlockedStatus("Waiting for OAuth relation")
+            self._stop()
             return
 
         self.setup_fga_auth_model(container)
@@ -463,17 +464,20 @@ class JimmOperatorCharm(CharmBase):
 
     def _on_stop(self, _) -> None:
         """Stop JIMM."""
-        try:
-            container = self.unit.get_container(WORKLOAD_CONTAINER)
-            if container.can_connect():
-                container.stop(JIMM_SERVICE_NAME)
-        except Exception as e:
-            logger.info("failed to stop the jimm service: {}".format(e))
+        self._stop()
         try:
             self._ready()
         except DeferError:
             logger.info("workload not ready")
             return
+
+    def _stop(self):
+        try:
+            container = self.unit.get_container(WORKLOAD_CONTAINER)
+            if container.can_connect() and container.get_service(JIMM_SERVICE_NAME).is_running():
+                container.stop(JIMM_SERVICE_NAME)
+        except Exception as e:
+            logger.info("failed to stop the jimm service: {}".format(e))
 
     def _on_update_status(self, event) -> None:
         """Update the status of the charm."""

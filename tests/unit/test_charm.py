@@ -596,7 +596,7 @@ class TestCharm(TestCase):
         # Perform a regex match that the result is an IP address
         self.assertGreaterEqual(len(subnets), 1)
         for subnet in subnets:
-            self.assertRegexpMatches(subnet, r"^([0-9]{1,3}\.){3}[0-9]{1,3}($|/(\d{2}))$")
+            self.assertRegex(subnet, r"^([0-9]{1,3}\.){3}[0-9]{1,3}($|/(\d{2}))$")
 
     def test_cors_allowed_origins(self):
         self.use_fake_session_secret()
@@ -610,3 +610,17 @@ class TestCharm(TestCase):
         expected_env = EXPECTED_VAULT_ENV.copy()
         expected_env.update({"CORS_ALLOWED_ORIGINS": "http://test.localhost"})
         self.assertEqual(plan.to_dict(), get_expected_plan(expected_env))
+
+    def test_remove_oauth_relation(self):
+        self.start_minimal_jimm()
+        self.assertEqual(
+            self.harness.charm.unit.get_container(WORKLOAD_CONTAINER).get_service(JIMM_SERVICE_NAME).is_running(), True
+        )
+
+        self.harness.remove_relation(self.oauth_rel_id)
+
+        self.assertEqual(
+            self.harness.charm.unit.get_container(WORKLOAD_CONTAINER).get_service(JIMM_SERVICE_NAME).is_running(), False
+        )
+        self.assertEqual(self.harness.charm.unit._status.message, "Waiting for OAuth relation")
+        self.assertEqual(self.harness.charm.unit._status.name, "blocked")
