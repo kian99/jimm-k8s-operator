@@ -462,10 +462,10 @@ class TestCharm(TestCase):
 
         self.assertTrue(data)
         self.assertEqual(
-            data["controller_url"],
+            data["controller-url"],
             "wss://jimm.localhost",
         )
-        self.assertEqual(data["is_juju"], "False")
+        self.assertEqual(data["is-juju"], "False")
 
     def test_vault_relation_joined(self):
         self.use_fake_session_secret()
