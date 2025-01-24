@@ -72,6 +72,17 @@ options:
       Expiry duration for JIMM session tokens. These tokens are used
       by clients and their expiry determines how frequently a user
       must login.
+  ssh-port:
+    type: int
+    default: 17022
+    description: The port that JIMM will expose the jump server on.
+  ssh-max-concurrent-connections:
+    type: int
+    default: 100
+    description: The maximum number of concurrent SSH connections allowed.
+  ssh-host-key-secret-id:
+    type: string
+    description: The secret ID of the SSH host key.
   uuid:
     type: string
     description: The UUID advertised by the JIMM controller.

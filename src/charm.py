@@ -40,6 +40,8 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRevokedEvent,
 )
 from charms.vault_k8s.v0 import vault_kv
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from ops import pebble
 from ops.charm import (
     ActionEvent,
@@ -93,9 +95,11 @@ VAULT_NONCE_SECRET_LABEL = "nonce"
 # Template for storing trusted certificate in a file.
 TRUSTED_CA_TEMPLATE = string.Template("/usr/local/share/ca-certificates/trusted-ca-cert-$rel_id-ca.crt")
 SESSION_KEY_SECRET_LABEL = "session_key"
+HOST_KEY_SECRET_LABEL = "host_key"
 # Keys should be lowercase letters and digits, at least 3 characters long,
 # start with a letter, and not start or end with a hyphen.
 SESSION_KEY_LOOKUP = "sessionkey"
+HOST_KEY_LOOKUP = "hostkey"
 
 
 class DeferError(Exception):
@@ -197,6 +201,7 @@ class JimmOperatorCharm(CharmBase):
         self.framework.observe(self.vault.on.connected, self._on_vault_connected)
         self.framework.observe(self.vault.on.ready, self._on_vault_ready)
         self.framework.observe(self.vault.on.gone_away, self._on_vault_gone_away)
+        self.framework.observe(self.on.secret_changed, self._on_secret_changed)
 
         # Grafana relation
         self._grafana_dashboards = GrafanaDashboardProvider(self, relation_name="grafana-dashboard")
@@ -241,6 +246,14 @@ class JimmOperatorCharm(CharmBase):
             description="Nonce for vault-kv relation",
         )
         self.ensure_session_secret_key()
+        self.ensure_hostkey_secret_key()
+
+    def _on_secret_changed(self, event: SecretChangedEvent) -> None:
+        # Update the workload if ssh-host-key-secret-id is set in the config and the secret-changed event is fired.
+        if self.config.get("ssh-host-key-secret-id") != "" and event.secret.id == self.config.get(
+            "ssh-host-key-secret-id"
+        ):
+            self._update_workload(event)
 
     @requires_state_setter
     def _on_leader_elected(self, event) -> None:
@@ -318,6 +331,14 @@ class JimmOperatorCharm(CharmBase):
             event.defer()
             return
 
+        try:
+            host_key = self._get_host_key()
+        except Exception as e:
+            logger.warning(f"error retrieving host-key: {e}, deferring...")
+            self.unit.status = BlockedStatus("hostkey retrieval failed. Check juju debug logs.")
+            event.defer()
+            return
+
         config_values = {
             "CORS_ALLOWED_ORIGINS": self.config.get("cors-allowed-origins"),
             "JIMM_AUDIT_LOG_RETENTION_PERIOD_IN_DAYS": self.config.get("audit-log-retention-period-in-days", ""),
@@ -346,6 +367,9 @@ class JimmOperatorCharm(CharmBase):
             "JIMM_SECURE_SESSION_COOKIES": self.config.get("secure-session-cookies"),
             "JIMM_SESSION_COOKIE_MAX_AGE": self.config.get("session-cookie-max-age"),
             "JIMM_SESSION_SECRET_KEY": session_key,
+            "JIMM_SSH_PORT": self.config.get("ssh-port"),
+            "JIMM_SSH_HOST_KEY": host_key,
+            "JIMM_SSH_MAX_CONCURRENT_CONNECTIONS": self.config.get("ssh-max-concurrent-connections"),
             "NO_PROXY": os.environ.get("JUJU_CHARM_NO_PROXY"),
             "HTTP_PROXY": os.environ.get("JUJU_CHARM_HTTP_PROXY"),
             "HTTPS_PROXY": os.environ.get("JUJU_CHARM_HTTPS_PROXY"),
@@ -449,6 +473,15 @@ class JimmOperatorCharm(CharmBase):
             warning_msg = "updating workload failed, JIMM units weren't restarted, they might not be ready"
             logger.warning(warning_msg)
             event.log(warning_msg)
+
+    # Ensure the host key is present.
+    def ensure_hostkey_secret_key(self):
+        if not self.unit.is_leader():
+            return
+        try:
+            self.model.get_secret(label=HOST_KEY_SECRET_LABEL)
+        except SecretNotFoundError:
+            self.app.add_secret(new_host_key(), label=HOST_KEY_SECRET_LABEL)
 
     def on_secret_changed(self, event: SecretChangedEvent):
         """
@@ -604,6 +637,22 @@ class JimmOperatorCharm(CharmBase):
             dns_name = self._state.dns_name
 
         return dns_name
+
+    def _get_host_key(self) -> str:
+        """
+        _get_host_key gets the host key from the user's secret set in the charm config if set or from the default secret
+        created by the charm.
+        """
+        host_key_secret_id = self.config.get("ssh-host-key-secret-id", "")
+        if not host_key_secret_id:
+            host_key = self.model.get_secret(label=HOST_KEY_SECRET_LABEL).get_content(refresh=True)[HOST_KEY_LOOKUP]
+        else:
+            host_key = self.model.get_secret(id=host_key_secret_id).get_content(refresh=True)[HOST_KEY_LOOKUP]
+
+        if not is_valid_private_key(host_key):
+            raise ValueError("Invalid private key")
+
+        return host_key
 
     @requires_state_setter
     def _on_certificates_relation_joined(self, event: RelationJoinedEvent) -> None:
@@ -845,11 +894,34 @@ def new_session_key():
     return {SESSION_KEY_LOOKUP: b64encode(os.urandom(64)).decode("utf-8")}
 
 
+def new_host_key():
+    """Generate a host key dict which holds a key value pair used for securing SSH connections.
+    The key is a 4096 bit RSA key generated using the charm's tls_certificates library using.
+    """
+    return {HOST_KEY_LOOKUP: generate_private_key(key_size=4096).decode()}
+
+
 def ensureFQDN(dns: str) -> str:  # noqa: N802
     """Ensures a domain name has an https:// prefix."""
     if not dns.startswith("http"):
         dns = "https://" + dns
     return dns
+
+
+def is_valid_private_key(key: str):
+    """
+    is_valid_private_key checks if the provided key is a valid private key, either PEM or OPENSSH format.
+    """
+    try:
+        serialization.load_pem_private_key(key.encode(), password=None, backend=default_backend())
+        return True
+    except Exception:
+        try:
+            serialization.load_ssh_private_key(key.encode(), password=None, backend=default_backend())
+            return True
+        except Exception as e:
+            logger.error(f"Invalid private key: {e}")
+            return False
 
 
 if __name__ == "__main__":
