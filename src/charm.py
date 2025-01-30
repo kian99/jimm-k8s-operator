@@ -49,6 +49,7 @@ from ops.charm import (
     InstallEvent,
     RelationJoinedEvent,
     SecretChangedEvent,
+    UpgradeCharmEvent,
 )
 from ops.main import main
 from ops.model import (
@@ -198,6 +199,7 @@ class JimmOperatorCharm(CharmBase):
             "jimm",
         )
         self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade)
         self.framework.observe(self.vault.on.connected, self._on_vault_connected)
         self.framework.observe(self.vault.on.ready, self._on_vault_ready)
         self.framework.observe(self.vault.on.gone_away, self._on_vault_gone_away)
@@ -245,6 +247,10 @@ class JimmOperatorCharm(CharmBase):
             label=VAULT_NONCE_SECRET_LABEL,
             description="Nonce for vault-kv relation",
         )
+        self.ensure_session_secret_key()
+        self.ensure_hostkey_secret_key()
+
+    def _on_upgrade(self, event: UpgradeCharmEvent) -> None:
         self.ensure_session_secret_key()
         self.ensure_hostkey_secret_key()
 
