@@ -71,6 +71,7 @@ async def deploy_jimm(
                     # to one of HTTP endpoints of JIMM.
                     "juju-dashboard-location": os.path.join(jimm_address.geturl(), "debug/info"),
                 },
+                num_units=2,
             ),
             ops_test.model.deploy("nginx-ingress-integrator", application_name="jimm-ingress", channel="latest/stable"),
             ops_test.model.deploy(
@@ -110,7 +111,6 @@ async def deploy_jimm(
 
     logger.info("adding oauth relation")
     await ops_test.model.integrate(f"{APP_NAME}:oauth", hydra_app_name)
-
     await ops_test.model.wait_for_idle(timeout=2000)
     jimm_debug_info = requests.get(os.path.join(jimm_address.geturl(), "debug/info"))
     assert jimm_debug_info.status_code == 200

@@ -855,14 +855,28 @@ class JimmOperatorCharm(CharmBase):
             "Pulling trusted ca certificates from %s relation.",
             self.trusted_cert_transfer.relationship_name,
         )
-        for relation in self.model.relations.get(self.trusted_cert_transfer.relationship_name, []):
-            # For some reason, relation.units includes our unit and app. Need to exclude them.
-            for unit in set(relation.units).difference([self.app, self.unit]):
-                # Note: this nested loop handles the case of multi-unit CA, each unit providing
-                # a different ca cert, but that is not currently supported by the lib itself.
-                cert_path = TRUSTED_CA_TEMPLATE.substitute(rel_id=relation.id)
-                if cert := relation.data[unit].get("ca"):
-                    container.push(cert_path, cert, make_dirs=True)
+        certs = []
+        if self.unit.is_leader():
+            for relation in self.model.relations.get(self.trusted_cert_transfer.relationship_name, []):
+                for unit in set(relation.units).difference([self.app, self.unit]):
+                    # Note: this nested loop handles the case of multi-unit CA, each unit providing
+                    # a different ca cert, but that is not currently supported by the lib itself.
+                    cert_path = TRUSTED_CA_TEMPLATE.substitute(rel_id=relation.id)
+                    if cert := relation.data[unit].get("ca"):
+                        certs.append([cert_path, cert])
+            # set certs in peer relation databag, if they are changed
+            if certs:
+                existing_certs_secret = json.loads(self.model.get_relation("peer").data[self.app].get("ca", "[]"))
+                certs_json = json.dumps(certs)
+                if existing_certs_secret != certs_json:
+                    self.model.get_relation("peer").data[self.app]["ca"] = certs_json
+        else:
+            # in non-leader units read data from the relation databag
+            certs = json.loads(self.model.get_relation("peer").data[self.app].get("ca", "[]"))
+
+        # now push certs in the containers
+        for [cert_path, cert] in certs:
+            container.push(cert_path, cert, make_dirs=True)
 
         stdout, stderr = container.exec(["update-ca-certificates", "--fresh"]).wait_output()
         logger.info("stdout update-ca-certificates: %s", stdout)
