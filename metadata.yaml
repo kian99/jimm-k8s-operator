@@ -51,6 +51,9 @@ requires:
   ingress:
     interface: ingress
     limit: 1
+  ingress-ssh:
+    interface: ingress_per_unit
+    limit: 1
   nginx-route:
     interface: nginx-route
   database:

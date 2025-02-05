@@ -34,6 +34,10 @@ from charms.tls_certificates_interface.v1.tls_certificates import (
     generate_csr,
     generate_private_key,
 )
+from charms.traefik_k8s.v1.ingress_per_unit import (
+    IngressPerUnitReadyForUnitEvent,
+    IngressPerUnitRequirer,
+)
 from charms.traefik_k8s.v2.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -162,6 +166,11 @@ class JimmOperatorCharm(CharmBase):
             strip_prefix=True,
             port=8080,
         )
+
+        self.ingress_ssh = IngressPerUnitRequirer(self, relation_name="ingress-ssh", mode="tcp")
+        self.framework.observe(self.ingress_ssh.on.ready_for_unit, self._on_ingress_ssh_ready)
+        self.framework.observe(self.ingress_ssh.on.revoked_for_unit, self._on_ingress_ssh_revoked)
+
         self.framework.observe(self.ingress.on.ready, self._on_ingress_ready)
         self.framework.observe(
             self.ingress.on.revoked,
@@ -345,6 +354,11 @@ class JimmOperatorCharm(CharmBase):
             event.defer()
             return
 
+        # Update the ssh ingress to reflect ssh port config changed. This is done in the leader unit
+        # because the ingress is per-unit and it doesn't support multiple units.
+        if self.unit.is_leader():
+            self.ingress_ssh.provide_ingress_requirements(port=self.config.get("ssh-port"))
+
         config_values = {
             "CORS_ALLOWED_ORIGINS": self.config.get("cors-allowed-origins"),
             "JIMM_AUDIT_LOG_RETENTION_PERIOD_IN_DAYS": self.config.get("audit-log-retention-period-in-days", ""),
@@ -385,7 +399,6 @@ class JimmOperatorCharm(CharmBase):
 
         if self._state.dsn:
             config_values["JIMM_DSN"] = self._state.dsn
-
         vault_config = self._vault_config()
         insecure_secret_store = self.config.get("postgres-secret-storage", False)
         if not vault_config and not insecure_secret_store:
@@ -734,6 +747,12 @@ class JimmOperatorCharm(CharmBase):
         self._state.dns_name = event.url
 
         self._update_workload(event)
+
+    def _on_ingress_ssh_ready(self, event: IngressPerUnitReadyForUnitEvent):
+        logger.info(f"Ingress for ssh at {event.url}")
+
+    def _on_ingress_ssh_revoked(self, _):
+        logger.info("I have lost my ingress URL!")
 
     @requires_state_setter
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
