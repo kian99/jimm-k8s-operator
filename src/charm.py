@@ -167,7 +167,17 @@ class JimmOperatorCharm(CharmBase):
             port=8080,
         )
 
-        self.ingress_ssh = IngressPerUnitRequirer(self, relation_name="ingress-ssh", mode="tcp")
+        # if the unit is the leader we set the port. We set the port just for the leader,
+        # because IngressPerUnit is opening a port on the traefik charm, and it can't open the same
+        # port multiple times. This should be solved once we have IngressPerApp in tcp mode.
+        # https://github.com/canonical/traefik-k8s-operator/issues/440
+        if self.unit.is_leader():
+            self.ingress_ssh = IngressPerUnitRequirer(
+                self, relation_name="ingress-ssh", mode="tcp", port=self.config.get("ssh-port")
+            )
+        else:
+            self.ingress_ssh = IngressPerUnitRequirer(self, relation_name="ingress-ssh", mode="tcp")
+
         self.framework.observe(self.ingress_ssh.on.ready_for_unit, self._on_ingress_ssh_ready)
         self.framework.observe(self.ingress_ssh.on.revoked_for_unit, self._on_ingress_ssh_revoked)
 
