@@ -434,13 +434,18 @@ class JimmOperatorCharm(CharmBase):
                     "command": "/usr/local/bin/jimmsrv",
                     "startup": "disabled",
                     "environment": config_values,
+                    "on-check-failure": {
+                        "jimm-check": "restart"
+                    }
                 }
             },
             "checks": {
                 "jimm-check": {
                     "override": "replace",
-                    "period": "1m",
-                    "http": {"url": "http://localhost:8080/debug/status"},
+                    "period": "5s",
+                    "timeout": "3s",
+                    "threshold": 5,
+                    "http": {"url": "http://localhost:8080/debug/info"},
                 }
             },
         }

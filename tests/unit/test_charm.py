@@ -103,13 +103,18 @@ def get_expected_plan(env):
                 "override": "replace",
                 "command": "/usr/local/bin/jimmsrv",
                 "environment": env,
+                "on-check-failure": {
+                    "jimm-check": "restart"
+                }
             }
         },
         "checks": {
             "jimm-check": {
                 "override": "replace",
-                "period": "1m",
-                "http": {"url": "http://localhost:8080/debug/status"},
+                "period": "5s",
+                "timeout": "3s",
+                "threshold": 5,
+                "http": {"url": "http://localhost:8080/debug/info"},
             }
         },
     }
