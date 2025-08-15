@@ -236,7 +236,7 @@ class TestCharm(TestCase):
 
     def start_minimal_jimm(self):
         self.harness.enable_hooks()
-        self.harness.charm._state.dsn = "postgres-dsn"
+        self.add_postgres_relation()
         self.create_auth_model_info()
         self.add_openfga_relation()
         self.add_vault_relation()
@@ -327,7 +327,7 @@ class TestCharm(TestCase):
         self.create_auth_model_info()
         self.add_postgres_relation()
         self.assertEqual(
-            self.harness.charm._state.dsn, "postgresql://postgres-user:postgres-pass@local-1.localhost/jimm"
+            self.harness.charm._make_database_dsn(), "postgresql://postgres-user:postgres-pass@local-1.localhost/jimm"
         )
 
     def test_postgres_secret_storage_config(self):
@@ -521,8 +521,7 @@ class TestCharm(TestCase):
 
     def test_app_blocked_without_private_key(self):
         self.harness.enable_hooks()
-        # Fake the Postgres relation.
-        self.harness.charm._state.dsn = "postgres-dsn"
+        self.add_postgres_relation()
         # Setup the OpenFGA relation.
         self.create_auth_model_info()
         self.add_openfga_relation()
@@ -621,8 +620,7 @@ class TestCharm(TestCase):
         self.create_auth_model_info()
         self.add_openfga_relation()
         self.add_vault_relation()
-        # Fake the Postgres relation.
-        self.harness.charm._state.dsn = "postgres-dsn"
+        self.add_postgres_relation()
 
         # Set the config as a new secret
         host_key = new_host_key()[HOST_KEY_LOOKUP]
@@ -644,8 +642,7 @@ class TestCharm(TestCase):
         self.create_auth_model_info()
         self.add_openfga_relation()
         self.add_vault_relation()
-        # Fake the Postgres relation.
-        self.harness.charm._state.dsn = "postgres-dsn"
+        self.add_postgres_relation()
         # Set the config as a new secret
         secret_id = self.harness.add_user_secret({"hostkey": "invalid-key"})
         self.harness.grant_secret(secret_id, "juju-jimm-k8s")
@@ -663,8 +660,7 @@ class TestCharm(TestCase):
         self.create_auth_model_info()
         self.add_openfga_relation()
         self.add_vault_relation()
-        # Fake the Postgres relation.
-        self.harness.charm._state.dsn = "postgres-dsn"
+        self.add_postgres_relation()
 
         # Set the config as a new secret
         host_key = new_host_key()[HOST_KEY_LOOKUP]
