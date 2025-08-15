@@ -51,6 +51,7 @@ from ops.charm import (
     ActionEvent,
     CharmBase,
     InstallEvent,
+    RelationDepartedEvent,
     RelationJoinedEvent,
     SecretChangedEvent,
     UpgradeCharmEvent,
@@ -203,6 +204,10 @@ class JimmOperatorCharm(CharmBase):
             self.database.on.endpoints_changed,
             self._on_database_event,
         )
+        self.framework.observe(
+            self.on.database_relation_broken,
+            self._on_database_relation_broken,
+        )
 
         # OpenFGA relation
         self.openfga = OpenFGARequires(self, OPENFGA_STORE_NAME)
@@ -337,6 +342,11 @@ class JimmOperatorCharm(CharmBase):
             self._stop()
             return
 
+        if not self.database.is_resource_created():
+            logger.warning("database relation is not ready yet")
+            self.unit.status = BlockedStatus("Waiting for database relation")
+            return
+
         self.setup_fga_auth_model(container)
 
         dns_name = self._get_dns_name(event)
@@ -386,6 +396,7 @@ class JimmOperatorCharm(CharmBase):
             "OPENFGA_PORT": self._state.openfga_port,
             "BAKERY_PRIVATE_KEY": self.config.get("private-key", ""),
             "BAKERY_PUBLIC_KEY": self.config.get("public-key", ""),
+            "JIMM_DSN": self._make_database_dsn(),
             "JIMM_JWT_EXPIRY": self.config.get("jwt-expiry"),
             "JIMM_MACAROON_EXPIRY_DURATION": self.config.get("macaroon-expiry-duration", "24h"),
             "JIMM_ACCESS_TOKEN_EXPIRY_DURATION": self.config.get("session-expiry-duration"),
@@ -407,8 +418,6 @@ class JimmOperatorCharm(CharmBase):
         if self.unit.is_leader():
             config_values["JIMM_IS_LEADER"] = "True"
 
-        if self._state.dsn:
-            config_values["JIMM_DSN"] = self._state.dsn
         vault_config = self._vault_config()
         insecure_secret_store = self.config.get("postgres-secret-storage", False)
         if not vault_config and not insecure_secret_store:
@@ -588,17 +597,26 @@ class JimmOperatorCharm(CharmBase):
             )
             return
 
-        # get the first endpoint from a comma separate list
-        ep = event.endpoints.split(",", 1)[0]
-        # compose the db connection string
-        uri = f"postgresql://{event.username}:{event.password}@{ep}/{DATABASE_NAME}"
+        logger.info("received database details")
+        self._update_workload(event)
 
-        logger.info("received database uri: {}".format(uri))
-
-        # record the connection string
-        self._state.dsn = uri
+    @requires_state_setter
+    def _on_database_relation_broken(self, event: RelationDepartedEvent) -> None:
+        """Database relation broken event handler."""
 
         self._update_workload(event)
+
+    def _make_database_dsn(self) -> str:
+        """Constructs a database DSN from the database relation."""
+        if not self.database.is_resource_created():
+            return ""
+
+        integration_id = self.database.relations[0].id
+        integration_data: dict[str, str] = self.database.fetch_relation_data()[integration_id]
+        username = integration_data.get("username", "")
+        password = integration_data.get("password", "")
+        endpoint = integration_data.get("endpoints", "").split(",")[0]
+        return f"postgresql://{username}:{password}@{endpoint}/{DATABASE_NAME}"
 
     def _ready(self):
         container = self.unit.get_container(WORKLOAD_CONTAINER)
