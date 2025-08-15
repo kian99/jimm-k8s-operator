@@ -396,6 +396,7 @@ class JimmOperatorCharm(CharmBase):
             "OPENFGA_PORT": self._state.openfga_port,
             "BAKERY_PRIVATE_KEY": self.config.get("private-key", ""),
             "BAKERY_PUBLIC_KEY": self.config.get("public-key", ""),
+            "JIMM_DSN": self._make_database_dsn(),
             "JIMM_JWT_EXPIRY": self.config.get("jwt-expiry"),
             "JIMM_MACAROON_EXPIRY_DURATION": self.config.get("macaroon-expiry-duration", "24h"),
             "JIMM_ACCESS_TOKEN_EXPIRY_DURATION": self.config.get("session-expiry-duration"),
@@ -417,8 +418,6 @@ class JimmOperatorCharm(CharmBase):
         if self.unit.is_leader():
             config_values["JIMM_IS_LEADER"] = "True"
 
-        if self._state.dsn:
-            config_values["JIMM_DSN"] = self._make_database_dsn()
         vault_config = self._vault_config()
         insecure_secret_store = self.config.get("postgres-secret-storage", False)
         if not vault_config and not insecure_secret_store:
@@ -608,7 +607,7 @@ class JimmOperatorCharm(CharmBase):
         self._update_workload(event)
 
     def _make_database_dsn(self) -> str:
-        """ Constructs a database DSN from the database relation."""
+        """Constructs a database DSN from the database relation."""
         if not self.database.is_resource_created():
             return ""
 

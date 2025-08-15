@@ -55,6 +55,7 @@ MINIMAL_CONFIG = {
 fixed_host_key = new_host_key()[HOST_KEY_LOOKUP]
 
 BASE_ENV = {
+    "JIMM_DSN": "postgresql://postgres-user:postgres-pass@local-1.localhost/jimm",
     "JIMM_DASHBOARD_LOCATION": "https://jaas.ai/models",
     "JIMM_DNS_NAME": "jimm.localhost",
     "JIMM_LISTEN_ADDR": ":8080",
@@ -236,10 +237,10 @@ class TestCharm(TestCase):
 
     def start_minimal_jimm(self):
         self.harness.enable_hooks()
-        self.add_postgres_relation()
         self.create_auth_model_info()
         self.add_openfga_relation()
         self.add_vault_relation()
+        self.add_postgres_relation()
         self.harness.update_config(MINIMAL_CONFIG)
         self.assertEqual(self.harness.charm.unit.status.name, ActiveStatus.name)
         self.assertEqual(self.harness.charm.unit.status.message, "running")
@@ -275,6 +276,7 @@ class TestCharm(TestCase):
         self.harness.enable_hooks()
         self.create_auth_model_info()
         self.add_vault_relation()
+        self.add_postgres_relation()
         self.harness.update_config(MINIMAL_CONFIG)
 
         container = self.harness.model.unit.get_container("jimm")
@@ -297,6 +299,7 @@ class TestCharm(TestCase):
         self.harness.enable_hooks()
         self.create_auth_model_info()
         self.add_vault_relation()
+        self.add_postgres_relation()
         container = self.harness.model.unit.get_container("jimm")
         self.harness.charm.on.jimm_pebble_ready.emit(container)
 
@@ -335,6 +338,7 @@ class TestCharm(TestCase):
         self.use_fake_host_key()
         self.ensure_jimm_secrets()
         self.create_auth_model_info()
+        self.add_postgres_relation()
         self.harness.update_config(MINIMAL_CONFIG)
         self.harness.update_config({"postgres-secret-storage": True})
         container = self.harness.model.unit.get_container("jimm")
@@ -355,6 +359,7 @@ class TestCharm(TestCase):
         self.use_fake_host_key()
         self.ensure_jimm_secrets()
         self.create_auth_model_info()
+        self.add_postgres_relation()
         self.harness.update_config(MINIMAL_CONFIG)
         self.harness.update_config({"postgres-secret-storage": True})
         container = self.harness.model.unit.get_container("jimm")
@@ -376,6 +381,7 @@ class TestCharm(TestCase):
         self.create_auth_model_info()
         self.harness.enable_hooks()
         self.add_vault_relation()
+        self.add_postgres_relation()
         self.harness.update_config(
             {
                 **MINIMAL_CONFIG,
@@ -399,6 +405,7 @@ class TestCharm(TestCase):
         self.create_auth_model_info()
         self.harness.enable_hooks()
         self.add_vault_relation()
+        self.add_postgres_relation()
         self.harness.update_config(
             {
                 **MINIMAL_CONFIG,
@@ -467,6 +474,7 @@ class TestCharm(TestCase):
         self.harness.enable_hooks()
         self.create_auth_model_info()
         self.add_vault_relation()
+        self.add_postgres_relation()
         container = self.harness.model.unit.get_container("jimm")
         self.harness.charm.on.jimm_pebble_ready.emit(container)
 
@@ -514,6 +522,7 @@ class TestCharm(TestCase):
         self.create_auth_model_info()
         self.harness.enable_hooks()
         self.add_vault_relation()
+        self.add_postgres_relation()
 
         self.harness.update_config(MINIMAL_CONFIG)
         plan = self.harness.get_container_pebble_plan("jimm")
@@ -521,11 +530,11 @@ class TestCharm(TestCase):
 
     def test_app_blocked_without_private_key(self):
         self.harness.enable_hooks()
-        self.add_postgres_relation()
         # Setup the OpenFGA relation.
         self.create_auth_model_info()
         self.add_openfga_relation()
         self.add_vault_relation()
+        self.add_postgres_relation()
         self.harness.charm._state.openfga_auth_model_id = 1
         # Set the config with the private-key value missing.
         min_config_no_private_key = MINIMAL_CONFIG.copy()
@@ -562,6 +571,7 @@ class TestCharm(TestCase):
         dir_path.mkdir(parents=True)
         (dir_path / "authorisation_model.json").write_text("null")
         self.add_openfga_relation()
+        self.add_postgres_relation()
         self.assertEqual(self.harness.charm._state.openfga_auth_model_id, 123)
         self.assertNotEqual(self.harness.charm._state.openfga_auth_model_hash, "")
 
@@ -574,6 +584,7 @@ class TestCharm(TestCase):
         self.harness.charm._state.openfga_auth_model_hash = "37a6259cc0c1dae299a7866489dff0bd"
         with self.assertLogs() as cm:
             self.add_openfga_relation()
+            self.add_postgres_relation()
             found = False
             for line in cm.output:
                 found |= "auth model already exists, won't recreate" in line
@@ -588,6 +599,7 @@ class TestCharm(TestCase):
         self.harness.enable_hooks()
         self.create_auth_model_info()
         self.add_vault_relation()
+        self.add_postgres_relation()
         self.harness.update_config(MINIMAL_CONFIG)
 
         container = self.harness.model.unit.get_container("jimm")
@@ -606,6 +618,7 @@ class TestCharm(TestCase):
         self.harness.enable_hooks()
         self.create_auth_model_info()
         self.add_vault_relation()
+        self.add_postgres_relation()
         self.harness.update_config(MINIMAL_CONFIG)
 
         container = self.harness.model.unit.get_container("jimm")
@@ -700,6 +713,7 @@ class TestCharm(TestCase):
         self.harness.enable_hooks()
         self.create_auth_model_info()
         self.add_vault_relation()
+        self.add_postgres_relation()
         self.harness.update_config(MINIMAL_CONFIG)
         container = self.harness.model.unit.get_container("jimm")
         # Set is_leader to return false to mimic a non-leader unit.
@@ -724,6 +738,7 @@ class TestCharm(TestCase):
         self.create_auth_model_info()
         self.harness.enable_hooks()
         self.add_vault_relation()
+        self.add_postgres_relation()
 
         self.harness.update_config(MINIMAL_CONFIG)
         self.harness.update_config({"cors-allowed-origins": "http://test.localhost"})

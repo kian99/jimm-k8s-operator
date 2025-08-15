@@ -6,6 +6,3 @@ profile = "black"
 
 [tool.coverage.run]
 branch = true
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
