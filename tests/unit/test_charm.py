@@ -670,7 +670,9 @@ class TestCharm(TestCase):
                     return self.json_data
 
             # The specific error code should trigger a model creation
-            return MockResponse({"code":"authorization_model_not_found","message":"Authorization Model 'fake-model' not found"}, 400)
+            return MockResponse(
+                {"code": "authorization_model_not_found", "message": "Authorization Model 'fake-model' not found"}, 400
+            )
 
         mock_get.side_effect = mocked_requests_get
 
