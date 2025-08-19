@@ -56,7 +56,7 @@ class OpenFGAClient:
             model_id: The authorization model ID.
 
         Returns:
-            The authorization model as a dict, or None if not found (404).
+            The authorization model as a dict, or None if not found (OpenFGA error code).
 
         Raises:
             ValueError: If the request fails with a non-404 error.
@@ -66,8 +66,12 @@ class OpenFGAClient:
             resp = requests.get(url, headers=self._headers, verify=self.verify)
         except requests.exceptions.RequestException as e:
             raise ValueError(f"failed to fetch authorisation model - {e}") from e
-        if resp.status_code == 404:
-            return None
         if not resp.ok:
+            try:
+                error_data = resp.json()
+                if error_data.get("code") == "authorization_model_not_found":
+                    return None
+            except requests.exceptions.JSONDecodeError:
+                pass
             raise ValueError(f"failed to fetch authorisation model - {resp.text}")
         return resp.json()

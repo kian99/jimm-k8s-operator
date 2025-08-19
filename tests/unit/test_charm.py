@@ -658,19 +658,21 @@ class TestCharm(TestCase):
         # Existing model id in state to trigger comparison path
         self.harness.charm._state.openfga_auth_model_id = "existing-id"
 
-        # Mock GET to return a different remote model to force a create
+        # Mock GET to return a missing "error" message to force a create
         def mocked_requests_get(*args, **kwargs):
             class MockResponse:
                 def __init__(self, json_data, status_code):
                     self.json_data = json_data
                     self.status_code = status_code
-                    self.ok = True
+                    self.ok = False
 
                 def json(self):
                     return self.json_data
 
-            # 404 should trigger a model creation
-            return MockResponse({}, 404)
+            # The specific error code should trigger a model creation
+            return MockResponse(
+                {"code": "authorization_model_not_found", "message": "Authorization Model 'fake-model' not found"}, 400
+            )
 
         mock_get.side_effect = mocked_requests_get
 
