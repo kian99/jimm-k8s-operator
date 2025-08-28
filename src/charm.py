@@ -901,11 +901,23 @@ class JimmOperatorCharm(CharmBase):
         # doesn't support v0 relations. We append the _v1 suffix since this is what
         # the library does when creating the relation.
         # See https://github.com/canonical/certificate-transfer-interface/issues/171
-        cert_transfer_integrations = self.model.relations[
+        cert_transfer_integrations = self.trusted_cert_transfer.charm.model.relations[
             CERTIFICATE_TRANSFER_INTEGRATION_NAME
         ]
 
+        all_relations = self.model.relations
+        logger.warning(f"all relations {all_relations.keys()}")
+        for name, relations in all_relations.items():
+            logger.warning(f"relation {name}")
+            for relation in relations:
+                logger.warning(f"relation id {relation.id} with app data = {relation.data.get(relation.app, {})}")
+                for unit in relation.units:
+                    logger.warning(f"unit {unit.name} data = {relation.data.get(unit, {})}")
+
         for integration in cert_transfer_integrations:
+            if "ca" in integration.data[integration.app]:
+                ca = {integration.data[integration.app]["ca"]}
+                ca_certs.update(ca)
             ca = {integration.data[unit]["ca"] for unit in integration.units if "ca" in integration.data.get(unit, {})}
             ca_certs.update(ca)
 
