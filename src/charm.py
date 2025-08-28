@@ -896,9 +896,13 @@ class JimmOperatorCharm(CharmBase):
 
         ca_certs = self.trusted_cert_transfer.get_all_certificates()
 
-        # deal with v0 relations
+        # deal with v0 relations:
+        # Here we reach directly into the data-bag since the v1 cert-transfer library
+        # doesn't support v0 relations. We append the _v1 suffix since this is what
+        # the library does when creating the relation.
+        # See https://github.com/canonical/certificate-transfer-interface/issues/171
         cert_transfer_integrations = self.trusted_cert_transfer.charm.model.relations[
-            CERTIFICATE_TRANSFER_INTEGRATION_NAME
+            CERTIFICATE_TRANSFER_INTEGRATION_NAME + "_v1"
         ]
 
         for integration in cert_transfer_integrations:
