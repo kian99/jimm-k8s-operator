@@ -901,8 +901,8 @@ class JimmOperatorCharm(CharmBase):
         # doesn't support v0 relations. We append the _v1 suffix since this is what
         # the library does when creating the relation.
         # See https://github.com/canonical/certificate-transfer-interface/issues/171
-        cert_transfer_integrations = self.trusted_cert_transfer.charm.model.relations[
-            CERTIFICATE_TRANSFER_INTEGRATION_NAME + "_v1"
+        cert_transfer_integrations = self.model.relations[
+            CERTIFICATE_TRANSFER_INTEGRATION_NAME
         ]
 
         for integration in cert_transfer_integrations:
