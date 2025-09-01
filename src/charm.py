@@ -889,10 +889,15 @@ class JimmOperatorCharm(CharmBase):
         Returns:
             bool: A boolean to indicate whether the workload service should be restarted.
         """
-        if not self.model.get_relation(relation_name=self.trusted_cert_transfer.relationship_name):
-            return False
-
         logger.info("Validating trusted ca certificates.")
+
+        logger.warning("Dumping all relations to help debug certificate issues.")
+        for name, relations in self.model.relations.items():
+            logger.warning(f"relation {name}")
+            for relation in relations:
+                logger.warning(f"relation id {relation.id} with app data = {relation.data.get(relation.app, {})}")
+                for unit in relation.units:
+                    logger.warning(f"unit {unit.name} data = {relation.data.get(unit, {})}")
 
         ca_certs = self.trusted_cert_transfer.get_all_certificates()
 
@@ -905,9 +910,8 @@ class JimmOperatorCharm(CharmBase):
             CERTIFICATE_TRANSFER_INTEGRATION_NAME
         ]
 
-        all_relations = self.model.relations
-        logger.warning(f"all relations {all_relations.keys()}")
-        for name, relations in all_relations.items():
+        logger.warning("Dumping all relations to help debug certificate issues.")
+        for name, relations in self.model.relations.items():
             logger.warning(f"relation {name}")
             for relation in relations:
                 logger.warning(f"relation id {relation.id} with app data = {relation.data.get(relation.app, {})}")
