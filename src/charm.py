@@ -443,7 +443,7 @@ class JimmOperatorCharm(CharmBase):
             config_values.update(vault_config)
 
         if self.config.get("postgres-secret-storage", False):
-            config_values["INSECURE_SECRET_STORAGE"] = "enabled"  # Value doesn't matter, checks env var exists.
+            config_values["INSECURE_SECRET_STORAGE"] = "true"  # Parsed by Go's strconv.ParseBool
 
         # remove empty configuration values
         config_values = {key: value for key, value in config_values.items() if value}
