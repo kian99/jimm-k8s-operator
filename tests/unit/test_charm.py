@@ -368,7 +368,7 @@ class TestCharm(TestCase):
 
         plan = self.harness.get_container_pebble_plan("jimm")
         expected_env = BASE_ENV.copy()
-        expected_env.update({"INSECURE_SECRET_STORAGE": "enabled"})
+        expected_env.update({"INSECURE_SECRET_STORAGE": "true"})
         self.assertEqual(plan.to_dict(), get_expected_plan(expected_env))
 
     def test_proxy_settings(
@@ -384,7 +384,7 @@ class TestCharm(TestCase):
 
         plan = self.harness.get_container_pebble_plan("jimm")
         expected_env = BASE_ENV.copy()
-        expected_env.update({"INSECURE_SECRET_STORAGE": "enabled"})
+        expected_env.update({"INSECURE_SECRET_STORAGE": "true"})
         expected_env.update({"NO_PROXY": "no-proxy.canonincal.com"})
         expected_env.update({"HTTP_PROXY": "http-proxy.canonincal.com"})
         expected_env.update({"HTTPS_PROXY": "https-proxy.canonincal.com"})
