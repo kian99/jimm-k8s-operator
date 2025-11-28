@@ -123,10 +123,7 @@ class JimmOperatorCharm(CharmBase):
         super().__init__(*args)
 
         self._state = State(self.app, lambda: self.model.get_relation("peer"))
-        self.oauth = OAuthRequirer(self, self._oauth_client_config, relation_name=OAUTH)
 
-        self.framework.observe(self.oauth.on.oauth_info_changed, self._on_oauth_info_changed)
-        self.framework.observe(self.oauth.on.oauth_info_removed, self._on_oauth_info_changed)
         self.framework.observe(self.on.peer_relation_changed, self._on_peer_relation_changed)
         self.framework.observe(self.on.jimm_pebble_ready, self._on_jimm_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
@@ -193,6 +190,12 @@ class JimmOperatorCharm(CharmBase):
         require_nginx_route(
             charm=self, service_hostname=self.config.get("dns-name", ""), service_name=self.app.name, service_port=8080
         )
+
+        # OAuth relation
+        # Set this up after ingress as the ingress object is used to construct redirect URLs.
+        self.oauth = OAuthRequirer(self, self._oauth_client_config, relation_name=OAUTH)
+        self.framework.observe(self.oauth.on.oauth_info_changed, self._on_oauth_info_changed)
+        self.framework.observe(self.oauth.on.oauth_info_removed, self._on_oauth_info_changed)
 
         # Database relation
         self.database = DatabaseRequires(
