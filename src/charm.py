@@ -123,10 +123,7 @@ class JimmOperatorCharm(CharmBase):
         super().__init__(*args)
 
         self._state = State(self.app, lambda: self.model.get_relation("peer"))
-        self.oauth = OAuthRequirer(self, self._oauth_client_config, relation_name=OAUTH)
 
-        self.framework.observe(self.oauth.on.oauth_info_changed, self._on_oauth_info_changed)
-        self.framework.observe(self.oauth.on.oauth_info_removed, self._on_oauth_info_changed)
         self.framework.observe(self.on.peer_relation_changed, self._on_peer_relation_changed)
         self.framework.observe(self.on.jimm_pebble_ready, self._on_jimm_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
@@ -193,6 +190,12 @@ class JimmOperatorCharm(CharmBase):
         require_nginx_route(
             charm=self, service_hostname=self.config.get("dns-name", ""), service_name=self.app.name, service_port=8080
         )
+
+        # OAuth relation
+        # Set this up after ingress as the ingress object is used to construct redirect URLs.
+        self.oauth = OAuthRequirer(self, self._oauth_client_config, relation_name=OAUTH)
+        self.framework.observe(self.oauth.on.oauth_info_changed, self._on_oauth_info_changed)
+        self.framework.observe(self.oauth.on.oauth_info_removed, self._on_oauth_info_changed)
 
         # Database relation
         self.database = DatabaseRequires(
@@ -669,12 +672,7 @@ class JimmOperatorCharm(CharmBase):
 
     @requires_state
     def _get_dns_name(self, event) -> str:
-        default_dns_name = ""
-        dns_name = self.config.get("dns-name", default_dns_name)
-        if self._state.dns_name:
-            dns_name = self._state.dns_name
-
-        return dns_name
+        return self.ingress.url or str(self.config.get("dns-name", ""))
 
     def _get_host_key(self) -> str:
         """
@@ -763,19 +761,19 @@ class JimmOperatorCharm(CharmBase):
 
     @requires_state_setter
     def _on_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
-        self._state.dns_name = event.url
+        logger.info(f"Ingress for HTTP/S at {event.url}")
 
         self._update_workload(event)
 
     def _on_ingress_ssh_ready(self, event: IngressPerUnitReadyForUnitEvent):
-        logger.info(f"Ingress for ssh at {event.url}")
+        logger.info(f"Ingress for SSH at {event.url}")
 
     def _on_ingress_ssh_revoked(self, _):
-        logger.info("I have lost my ingress URL!")
+        logger.info("This app no longer has SSH ingress")
 
     @requires_state_setter
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
-        del self._state.dns_name
+        logger.info("This app no longer has HTTP/S ingress")
 
         self._update_workload(event)
 
@@ -863,8 +861,9 @@ class JimmOperatorCharm(CharmBase):
         if dns is None or dns == "":
             dns = "http://localhost"
         dns = ensureFQDN(str(dns))
+        dns = ensureAbsoluteURL(dns)
         return ClientConfig(
-            redirect_uri=urljoin(dns, "/auth/callback"),
+            redirect_uri=urljoin(dns, "auth/callback"),
             scope=OAUTH_SCOPES,
             grant_types=OAUTH_GRANT_TYPES,
             token_endpoint_auth_method="client_secret_post",
@@ -964,6 +963,16 @@ def ensureFQDN(dns: str) -> str:  # noqa: N802
     """Ensures a domain name has an https:// prefix."""
     if not dns.startswith("http"):
         dns = "https://" + dns
+    return dns
+
+
+def ensureAbsoluteURL(dns: str) -> str:  # noqa: N802
+    """
+    Ensures a domain name has a trailing slash.
+    This prevents methods like urljoin from stripping path components.
+    """
+    if not dns.endswith("/"):
+        dns = dns + "/"
     return dns
 
 
