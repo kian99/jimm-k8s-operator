@@ -441,6 +441,10 @@ class TestCharm(TestCase):
         oauth_client = self.harness.charm._oauth_client_config
         self.assertEqual(oauth_client.redirect_uri, "https://jimm.com/auth/callback")
 
+        self.harness.update_config({"dns-name": "jimm.com/some/path"})
+        oauth_client = self.harness.charm._oauth_client_config
+        self.assertEqual(oauth_client.redirect_uri, "https://jimm.com/some/path/auth/callback")
+
     def test_app_enters_block_states_if_oauth_relation_removed(self):
         self.harness.update_config(MINIMAL_CONFIG)
         self.harness.remove_relation(self.oauth_rel_id)
@@ -490,24 +494,11 @@ class TestCharm(TestCase):
         self.assertEqual(plan.to_dict(), get_expected_plan(expected_env))
 
     def test_dashboard_relation_joined(self):
-        harness = Harness(JimmOperatorCharm)
-        self.addCleanup(harness.cleanup)
+        self.start_minimal_jimm()
 
-        id = harness.add_relation("peer", "juju-jimm-k8s")
-        harness.add_relation_unit(id, "juju-jimm-k8s/1")
-        harness.begin()
-        harness.set_leader(True)
-        harness.update_config(
-            {
-                "dns-name": "jimm.localhost",
-                "controller-admins": "user1 user2 group1",
-                "uuid": "caaa4ba4-e2b5-40dd-9bf3-2bd26d6e17aa",
-            }
-        )
-
-        id = harness.add_relation("dashboard", "juju-dashboard")
-        harness.add_relation_unit(id, "juju-dashboard/0")
-        data = harness.get_relation_data(id, "juju-jimm-k8s")
+        id = self.harness.add_relation("dashboard", "juju-dashboard")
+        self.harness.add_relation_unit(id, "juju-dashboard/0")
+        data = self.harness.get_relation_data(id, "juju-jimm-k8s")
 
         self.assertTrue(data)
         self.assertEqual(
