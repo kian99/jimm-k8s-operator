@@ -1,11 +1,6 @@
 ### Applications ###
-resource "juju_model" "jimm" {
-  name = var.model
-}
-
 resource "juju_application" "jimm" {
   name  = var.name
-  model = juju_model.jimm.name
   trust = var.trust
   units = var.units
 
@@ -26,6 +21,7 @@ resource "juju_application" "jimm" {
     private-key             = sensitive(var.jimm_config.private_key)
   }
 
+  model_uuid = var.model_uuid
 }
 
 ### Misc ###
@@ -36,8 +32,7 @@ resource "random_uuid" "jimm-uuid" {
 
 
 resource "juju_application" "grafana_agent" {
-  name  = "grafana-agent"
-  model = juju_model.jimm.name
+  name = "grafana-agent"
 
   charm {
     name     = var.grafana_agent_charm.name
@@ -45,4 +40,5 @@ resource "juju_application" "grafana_agent" {
     base     = var.grafana_agent_charm.base
     revision = var.grafana_agent_charm.revision
   }
+  model_uuid = var.model_uuid
 }

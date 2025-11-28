@@ -1,29 +1,12 @@
 ### Integrations ###
-# The reason why we have this data is to verify the offer exists for the offer variable
-# set in the variables.
 
-data "juju_offer" "database" {
-  url = var.postgresql_offer_url
-}
-
-data "juju_offer" "ingress" {
-  url = var.ingress_offer_url
-}
-
-data "juju_offer" "openfga" {
-  url = var.openfga_offer_url
-}
-
-data "juju_offer" "vault" {
-  url = var.vault_offer_url
-}
-
-data "juju_offer" "oauth" {
-  url = var.oauth_offer_url
-}
+# TODO: Once https://github.com/juju/terraform-provider-juju/pull/989 is merged
+# and released, we can uncomment the lines below to allow a module user to
+# provide either an offer URL or an application name for the integration target. 
 
 resource "juju_integration" "jimm_openfga" {
-  model = juju_model.jimm.name
+  count      = var.openfga.offer_url != null || var.openfga.application_name != null ? 1 : 0
+  model_uuid = var.model_uuid
 
   application {
     name     = juju_application.jimm.name
@@ -31,12 +14,14 @@ resource "juju_integration" "jimm_openfga" {
   }
 
   application {
-    offer_url = data.juju_offer.openfga.url
+    # offer_url = var.openfga.offer_url != null ? var.openfga.offer_url : null
+    name = var.openfga.application_name != null ? var.openfga.application_name : null
   }
 }
 
 resource "juju_integration" "jimm_vault" {
-  model = juju_model.jimm.name
+  count      = var.vault.offer_url != null || var.vault.application_name != null ? 1 : 0
+  model_uuid = var.model_uuid
 
   application {
     name     = juju_application.jimm.name
@@ -44,12 +29,14 @@ resource "juju_integration" "jimm_vault" {
   }
 
   application {
-    offer_url = data.juju_offer.vault.url
+    # offer_url = var.vault.offer_url != null ? var.vault.offer_url : null
+    name = var.vault.application_name != null ? var.vault.application_name : null
   }
 }
 
 resource "juju_integration" "jimm_postgresql" {
-  model = juju_model.jimm.name
+  count      = var.postgresql.offer_url != null || var.postgresql.application_name != null ? 1 : 0
+  model_uuid = var.model_uuid
 
   application {
     name     = juju_application.jimm.name
@@ -57,24 +44,28 @@ resource "juju_integration" "jimm_postgresql" {
   }
 
   application {
-    offer_url = data.juju_offer.database.url
+    offer_url = var.postgresql.offer_url != null ? var.postgresql.offer_url : null
+    # name      = var.postgresql.application_name != null ? var.postgresql.application_name : null
   }
 }
 
 resource "juju_integration" "jimm_oauth" {
-  model = juju_model.jimm.name
+  count      = var.oauth.offer_url != null || var.oauth.application_name != null ? 1 : 0
+  model_uuid = var.model_uuid
 
   application {
     name = juju_application.jimm.name
   }
 
   application {
-    offer_url = data.juju_offer.oauth.url
+    # offer_url = var.oauth.offer_url != null ? var.oauth.offer_url : null
+    name = var.oauth.application_name != null ? var.oauth.application_name : null
   }
 }
 
 resource "juju_integration" "jimm_ingress" {
-  model = juju_model.jimm.name
+  count      = var.ingress.offer_url != null || var.ingress.application_name != null ? 1 : 0
+  model_uuid = var.model_uuid
 
   application {
     name     = juju_application.jimm.name
@@ -82,7 +73,8 @@ resource "juju_integration" "jimm_ingress" {
   }
 
   application {
-    offer_url = data.juju_offer.ingress.url
+    # offer_url = var.ingress.offer_url != null ? var.ingress.offer_url : null
+    name = var.ingress.application_name != null ? var.ingress.application_name : null
   }
 }
 
