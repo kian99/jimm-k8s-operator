@@ -1,4 +1,4 @@
-variable "model" {
+variable "model_uuid" {
   type    = string
   default = "jimm"
 }
@@ -77,44 +77,65 @@ variable "grafana_agent_charm" {
   }
 }
 
-variable "oauth_offer_url" {
-  description = "OAuth Offer URL"
-  type        = string
-  default     = ""
+variable "oauth" {
+  description = "OAuth integration configuration. Provide either offer_url or application_name."
+  type = object({
+    offer_url        = optional(string)
+    application_name = optional(string)
+  })
+  default = {}
 }
 
-variable "postgresql_offer_url" {
-  description = "PostgreSQL Offer URL"
-  type        = string
+variable "postgresql" {
+  description = "PostgreSQL integration configuration. Provide either offer_url or application_name."
+  type = object({
+    offer_url        = optional(string)
+    application_name = optional(string)
+  })
+  default = {}
 }
 
-variable "openfga_offer_url" {
-  description = "OpenFGA Offer URL"
-  type        = string
+variable "openfga" {
+  description = "OpenFGA integration configuration. Provide either offer_url or application_name."
+  type = object({
+    offer_url        = optional(string)
+    application_name = optional(string)
+  })
+  default = {}
 }
 
-variable "vault_offer_url" {
-  description = "Vault Offer URL"
-  type        = string
-  default     = ""
+variable "vault" {
+  description = "Vault integration configuration. Provide either offer_url or application_name."
+  type = object({
+    offer_url        = optional(string)
+    application_name = optional(string)
+  })
+  default = {}
 }
 
-variable "ingress_offer_url" {
-  description = "Ingress Offer URL"
-  type        = string
+variable "ingress" {
+  description = "Ingress integration configuration. Provide either offer_url or application_name."
+  type = object({
+    offer_url        = optional(string)
+    application_name = optional(string)
+  })
+  default = {}
 }
 
 variable "metrics_endpoint_offer_url" {
   description = "Grafana Metrics Endpoint Offer URL"
   type        = string
+  default     = null
 }
 
 variable "logging_consumer_offer_url" {
   description = "Grafana Agent Logging Offer URL"
   type        = string
+  default     = null
 }
 
 variable "grafana_dashboard_consumer_offer_url" {
   description = "Grafana Agent Dashboard Offer URL"
   type        = string
+  default     = null
 }

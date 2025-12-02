@@ -1,19 +1,6 @@
-# Add these to your data resources section
-data "juju_offer" "logging_consumer" {
-  url = var.logging_consumer_offer_url
-}
-
-data "juju_offer" "metrics_endpoint" {
-  url = var.metrics_endpoint_offer_url
-}
-
-data "juju_offer" "grafana_dashboard_consumer" {
-  url = var.grafana_dashboard_consumer_offer_url
-}
-
 # Add these integration resources
 resource "juju_integration" "grafana_metrics_endpoint" {
-  model = juju_model.jimm.name
+  count = var.metrics_endpoint_offer_url != null ? 1 : 0
 
   application {
     name     = juju_application.grafana_agent.name
@@ -21,25 +8,27 @@ resource "juju_integration" "grafana_metrics_endpoint" {
   }
 
   application {
-    offer_url = data.juju_offer.metrics_endpoint.url
+    offer_url = var.metrics_endpoint_offer_url
   }
+  model_uuid = var.model_uuid
 }
 
 resource "juju_integration" "grafana_logging_consumer" {
-  model = juju_model.jimm.name
+  count = var.logging_consumer_offer_url != null ? 1 : 0
 
   application {
-    name     = juju_application.grafana_agent
+    name     = juju_application.grafana_agent.name
     endpoint = "logging-consumer"
   }
 
   application {
-    offer_url = data.juju_offer.logging_consumer.url
+    offer_url = var.logging_consumer_offer_url
   }
+  model_uuid = var.model_uuid
 }
 
 resource "juju_integration" "grafana_dashboard_consumer" {
-  model = juju_model.jimm.name
+  count = var.grafana_dashboard_consumer_offer_url != null ? 1 : 0
 
   application {
     name     = juju_application.grafana_agent.name
@@ -47,12 +36,13 @@ resource "juju_integration" "grafana_dashboard_consumer" {
   }
 
   application {
-    offer_url = data.juju_offer.grafana_dashboard_consumer.url
+    offer_url = var.grafana_dashboard_consumer_offer_url
   }
+  model_uuid = var.model_uuid
 }
 
 resource "juju_integration" "jimm_grafana_agent_logging" {
-  model = juju_model.jimm.name
+  count = var.logging_consumer_offer_url != null ? 1 : 0
 
   application {
     name     = juju_application.jimm.name
@@ -62,10 +52,11 @@ resource "juju_integration" "jimm_grafana_agent_logging" {
   application {
     name = juju_application.grafana_agent.name
   }
+  model_uuid = var.model_uuid
 }
 
 resource "juju_integration" "jimm_grafana_agent_metric_endpoints" {
-  model = juju_model.jimm.name
+  count = var.metrics_endpoint_offer_url != null ? 1 : 0
 
   application {
     name     = juju_application.jimm.name
@@ -75,11 +66,12 @@ resource "juju_integration" "jimm_grafana_agent_metric_endpoints" {
   application {
     name = juju_application.grafana_agent.name
   }
+  model_uuid = var.model_uuid
 }
 
 
 resource "juju_integration" "jimm_grafana_agent_dashboard" {
-  model = juju_model.jimm.name
+  count = var.grafana_dashboard_consumer_offer_url != null ? 1 : 0
 
   application {
     name     = juju_application.jimm.name
@@ -89,4 +81,5 @@ resource "juju_integration" "jimm_grafana_agent_dashboard" {
   application {
     name = juju_application.grafana_agent.name
   }
+  model_uuid = var.model_uuid
 }

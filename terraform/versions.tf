@@ -3,11 +3,11 @@ terraform {
   required_providers {
     juju = {
       source  = "juju/juju"
-      version = ">= 0.18.0"
+      version = "~> 1.0"
     }
     random = {
       source  = "hashicorp/random"
-      version = ">= 3.6.0"
+      version = "~> 3.0"
     }
   }
 }
