@@ -11,7 +11,7 @@ resource "juju_integration" "jimm_openfga" {
 
   application {
     offer_url = var.openfga.offer_url != null ? var.openfga.offer_url : null
-    name = var.openfga.application_name != null ? var.openfga.application_name : null
+    name      = var.openfga.application_name != null ? var.openfga.application_name : null
   }
 }
 
@@ -26,7 +26,7 @@ resource "juju_integration" "jimm_vault" {
 
   application {
     offer_url = var.vault.offer_url != null ? var.vault.offer_url : null
-    name = var.vault.application_name != null ? var.vault.application_name : null
+    name      = var.vault.application_name != null ? var.vault.application_name : null
   }
 }
 
@@ -55,7 +55,7 @@ resource "juju_integration" "jimm_oauth" {
 
   application {
     offer_url = var.oauth.offer_url != null ? var.oauth.offer_url : null
-    name = var.oauth.application_name != null ? var.oauth.application_name : null
+    name      = var.oauth.application_name != null ? var.oauth.application_name : null
   }
 }
 
@@ -70,7 +70,7 @@ resource "juju_integration" "jimm_ingress" {
 
   application {
     offer_url = var.ingress.offer_url != null ? var.ingress.offer_url : null
-    name = var.ingress.application_name != null ? var.ingress.application_name : null
+    name      = var.ingress.application_name != null ? var.ingress.application_name : null
   }
 }
 

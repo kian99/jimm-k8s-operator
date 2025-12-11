@@ -61,6 +61,12 @@ variable "units" {
   default     = 3 #
 }
 
+variable "deploy_grafana_agent" {
+  description = "Whether to deploy the Grafana Agent application alongside JIMM."
+  type        = bool
+  default     = false
+}
+
 variable "grafana_agent_charm" {
   description = "The grafana agent application charm operator information."
   type = object({

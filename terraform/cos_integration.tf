@@ -3,7 +3,7 @@ resource "juju_integration" "grafana_metrics_endpoint" {
   count = var.metrics_endpoint_offer_url != null ? 1 : 0
 
   application {
-    name     = juju_application.grafana_agent.name
+    name     = juju_application.grafana_agent[0].name
     endpoint = "metrics-endpoint"
   }
 
@@ -17,7 +17,7 @@ resource "juju_integration" "grafana_logging_consumer" {
   count = var.logging_consumer_offer_url != null ? 1 : 0
 
   application {
-    name     = juju_application.grafana_agent.name
+    name     = juju_application.grafana_agent[0].name
     endpoint = "logging-consumer"
   }
 
@@ -31,7 +31,7 @@ resource "juju_integration" "grafana_dashboard_consumer" {
   count = var.grafana_dashboard_consumer_offer_url != null ? 1 : 0
 
   application {
-    name     = juju_application.grafana_agent.name
+    name     = juju_application.grafana_agent[0].name
     endpoint = "grafana-dashboards-consumer"
   }
 
@@ -50,7 +50,7 @@ resource "juju_integration" "jimm_grafana_agent_logging" {
   }
 
   application {
-    name = juju_application.grafana_agent.name
+    name = juju_application.grafana_agent[0].name
   }
   model_uuid = var.model_uuid
 }
@@ -64,7 +64,7 @@ resource "juju_integration" "jimm_grafana_agent_metric_endpoints" {
   }
 
   application {
-    name = juju_application.grafana_agent.name
+    name = juju_application.grafana_agent[0].name
   }
   model_uuid = var.model_uuid
 }
@@ -79,7 +79,7 @@ resource "juju_integration" "jimm_grafana_agent_dashboard" {
   }
 
   application {
-    name = juju_application.grafana_agent.name
+    name = juju_application.grafana_agent[0].name
   }
   model_uuid = var.model_uuid
 }
