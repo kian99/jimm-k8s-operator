@@ -32,6 +32,8 @@ resource "random_uuid" "jimm-uuid" {
 
 
 resource "juju_application" "grafana_agent" {
+  count = var.deploy_grafana_agent ? 1 : 0
+
   name = "grafana-agent"
 
   charm {
