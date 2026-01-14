@@ -368,6 +368,8 @@ class JimmOperatorCharm(CharmBase):
             logger.warning("dns name not set")
             return
 
+        login_token_refresh_url = "https://" + dns_name + "/.well-known/jwks.json"
+
         oauth_provider_info = self.oauth.get_provider_info()
         if not oauth_provider_info:
             logger.warning("OAuth provider info is not ready yet")
@@ -398,40 +400,41 @@ class JimmOperatorCharm(CharmBase):
             self.ingress_ssh.provide_ingress_requirements(port=self.config.get("ssh-port"))
 
         config_values = {
-            "CORS_ALLOWED_ORIGINS": self.config.get("cors-allowed-origins"),
-            "JIMM_AUDIT_LOG_RETENTION_PERIOD_IN_DAYS": self.config.get("audit-log-retention-period-in-days", ""),
-            "JIMM_ADMINS": self.config.get("controller-admins", ""),
-            "JIMM_DNS_NAME": dns_name,
-            "JIMM_LOG_LEVEL": self.config.get("log-level", ""),
-            "JIMM_UUID": self.config.get("uuid", ""),
-            "JIMM_DASHBOARD_LOCATION": self.config.get("juju-dashboard-location", "https://jaas.ai/models"),
-            "JIMM_LISTEN_ADDR": ":8080",
-            "OPENFGA_STORE": openfga_info.store_id,
-            "OPENFGA_AUTH_MODEL": self._state.openfga_auth_model_id,
-            "OPENFGA_HOST": openfga_url_details.hostname,
-            "OPENFGA_SCHEME": openfga_url_details.scheme,
-            "OPENFGA_TOKEN": openfga_info.token,
-            "OPENFGA_PORT": openfga_url_details.port,
             "BAKERY_PRIVATE_KEY": self.config.get("private-key", ""),
             "BAKERY_PUBLIC_KEY": self.config.get("public-key", ""),
+            "CORS_ALLOWED_ORIGINS": self.config.get("cors-allowed-origins"),
+            "HTTP_PROXY": os.environ.get("JUJU_CHARM_HTTP_PROXY"),
+            "HTTPS_PROXY": os.environ.get("JUJU_CHARM_HTTPS_PROXY"),
+            "JIMM_ACCESS_TOKEN_EXPIRY_DURATION": self.config.get("session-expiry-duration"),
+            "JIMM_ADMINS": self.config.get("controller-admins", ""),
+            "JIMM_AUDIT_LOG_RETENTION_PERIOD_IN_DAYS": self.config.get("audit-log-retention-period-in-days", ""),
+            "JIMM_BOOTSTRAP_LOGIN_TOKEN_REFRESH_URL": login_token_refresh_url,
+            "JIMM_DASHBOARD_FINAL_REDIRECT_URL": self.config.get("juju-dashboard-location"),
+            "JIMM_DASHBOARD_LOCATION": self.config.get("juju-dashboard-location", "https://jaas.ai/models"),
+            "JIMM_DNS_NAME": dns_name,
             "JIMM_DSN": self._make_database_dsn(),
             "JIMM_JWT_EXPIRY": self.config.get("jwt-expiry"),
+            "JIMM_LISTEN_ADDR": ":8080",
+            "JIMM_LOG_LEVEL": self.config.get("log-level", ""),
             "JIMM_MACAROON_EXPIRY_DURATION": self.config.get("macaroon-expiry-duration", "24h"),
-            "JIMM_ACCESS_TOKEN_EXPIRY_DURATION": self.config.get("session-expiry-duration"),
-            "JIMM_OAUTH_ISSUER_URL": oauth_provider_info.issuer_url,
             "JIMM_OAUTH_CLIENT_ID": oauth_provider_info.client_id,
             "JIMM_OAUTH_CLIENT_SECRET": oauth_provider_info.client_secret,
+            "JIMM_OAUTH_ISSUER_URL": oauth_provider_info.issuer_url,
             "JIMM_OAUTH_SCOPES": scopes,
-            "JIMM_DASHBOARD_FINAL_REDIRECT_URL": self.config.get("juju-dashboard-location"),
             "JIMM_SECURE_SESSION_COOKIES": self.config.get("secure-session-cookies"),
             "JIMM_SESSION_COOKIE_MAX_AGE": self.config.get("session-cookie-max-age"),
             "JIMM_SESSION_SECRET_KEY": session_key,
-            "JIMM_SSH_PORT": self.config.get("ssh-port"),
             "JIMM_SSH_HOST_KEY": host_key,
             "JIMM_SSH_MAX_CONCURRENT_CONNECTIONS": self.config.get("ssh-max-concurrent-connections"),
+            "JIMM_SSH_PORT": self.config.get("ssh-port"),
+            "JIMM_UUID": self.config.get("uuid", ""),
             "NO_PROXY": os.environ.get("JUJU_CHARM_NO_PROXY"),
-            "HTTP_PROXY": os.environ.get("JUJU_CHARM_HTTP_PROXY"),
-            "HTTPS_PROXY": os.environ.get("JUJU_CHARM_HTTPS_PROXY"),
+            "OPENFGA_AUTH_MODEL": self._state.openfga_auth_model_id,
+            "OPENFGA_HOST": openfga_url_details.hostname,
+            "OPENFGA_PORT": openfga_url_details.port,
+            "OPENFGA_SCHEME": openfga_url_details.scheme,
+            "OPENFGA_STORE": openfga_info.store_id,
+            "OPENFGA_TOKEN": openfga_info.token,
         }
         if self.unit.is_leader():
             config_values["JIMM_IS_LEADER"] = "True"
