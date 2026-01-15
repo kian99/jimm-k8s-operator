@@ -319,6 +319,32 @@ class TestCharm(TestCase):
         plan = self.harness.get_container_pebble_plan("jimm")
         self.assertEqual(plan.to_dict(), get_expected_plan(EXPECTED_VAULT_ENV))
 
+    def test_bootstrap_login_token_refresh_url_strips_scheme(self):
+        self.harness.enable_hooks()
+        self.use_fake_session_secret()
+        self.use_fake_host_key()
+        self.use_fake_setup_fga_model()
+        self.create_auth_model_info()
+        self.add_openfga_relation()
+        self.add_vault_relation()
+        self.add_postgres_relation()
+
+        config_with_scheme = {**MINIMAL_CONFIG, "dns-name": "https://jimm.localhost"}
+        self.harness.update_config(config_with_scheme)
+
+        container = self.harness.model.unit.get_container("jimm")
+        self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        plan_dict = plan.to_dict()
+        services = plan_dict.get("services", {})
+        service = services.get(JIMM_SERVICE_NAME, {})
+        env = service.get("environment", {})
+        self.assertEqual(
+            env.get("JIMM_BOOTSTRAP_LOGIN_TOKEN_REFRESH_URL"),
+            "https://jimm.localhost/.well-known/jwks.json",
+        )
+
     def test_ready_without_plan(self):
         self.harness.enable_hooks()
         self.harness.charm._ready()

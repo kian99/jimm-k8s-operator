@@ -368,7 +368,13 @@ class JimmOperatorCharm(CharmBase):
             logger.warning("dns name not set")
             return
 
-        login_token_refresh_url = "https://" + dns_name + "/.well-known/jwks.json"
+        parsed_dns_name = urlparse(dns_name)
+        if parsed_dns_name.scheme:
+            dns_without_scheme = f"{parsed_dns_name.netloc}{parsed_dns_name.path}"
+        else:
+            dns_without_scheme = dns_name
+        dns_without_scheme = dns_without_scheme.lstrip("/").rstrip("/")
+        login_token_refresh_url = f"https://{dns_without_scheme}/.well-known/jwks.json"
 
         oauth_provider_info = self.oauth.get_provider_info()
         if not oauth_provider_info:
