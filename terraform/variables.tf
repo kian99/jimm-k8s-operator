@@ -38,7 +38,7 @@ variable "jimm_config" {
     uuid              = optional(string, "")
     controller_admins = optional(string, "")
     log_level         = optional(string, "info")
-    dns_name          = string
+    dns_name          = optional(string, "")
     public_key        = optional(string, "")
     private_key       = optional(string, "")
   })
@@ -47,7 +47,7 @@ variable "jimm_config" {
       uuid: "The UUID advertised by the JIMM controller. If not provided, one will be generated for you."
       controller_admins: "Whitespace separated list of candid users (or groups) that are made controller admins by default."
       log_level: "Level to out log messages at, one of debug, info, warn, error, dpanic, panic, and fatal."
-      dns_name: "DNS hostname that JIMM is being served from."
+      dns_name: "A fallback for JIMM's address if the ingress integration does not provide it."
       # you can generate this keypair using `go run github.com/go-macaroon-bakery/macaroon-bakery/cmd/bakery-keygen/v3@latest
       public_key: "The public part of JIMM's macaroon bakery keypair."
       private_key: "The private part of JIMM's macaroon bakery keypair."
