@@ -77,7 +77,7 @@ async def deploy_jimm(
             ops_test.model.deploy(
                 "openfga-k8s",
                 application_name="openfga",
-                channel="2.0/stable",
+                channel="latest/stable",
             ),
             ops_test.model.deploy(
                 "traefik-k8s",
