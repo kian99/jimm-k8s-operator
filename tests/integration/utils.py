@@ -116,6 +116,5 @@ async def deploy_jimm(
     await ops_test.model.integrate(f"{APP_NAME}:ingress-ssh", "traefik")
 
     await ops_test.model.wait_for_idle(timeout=2000)
-    jimm_debug_info = requests.get(f"{JIMM_ADDRESS}/debug/info")
-    assert jimm_debug_info.status_code == 200
-    logger.info("jimm info = %s", jimm_debug_info.json())
+    macaroon_publickey = requests.get(f"{JIMM_ADDRESS}/macaroons/publickey")
+    assert macaroon_publickey.status_code == 200
