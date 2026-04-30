@@ -8,8 +8,11 @@ import logging
 import os
 import secrets
 from base64 import b64encode
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
+from uuid import uuid4
 
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificatesAvailableEvent,
@@ -45,6 +48,9 @@ from charms.traefik_k8s.v2.ingress import (
 )
 from charms.vault_k8s.v0 import vault_kv
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from jose.backends.cryptography_backend import CryptographyRSAKey
+from jose.constants import Algorithms
 from ops import pebble
 from ops.charm import (
     ActionEvent,
@@ -53,6 +59,7 @@ from ops.charm import (
     RelationDepartedEvent,
     RelationJoinedEvent,
     SecretChangedEvent,
+    SecretRemoveEvent,
     UpgradeCharmEvent,
 )
 from ops.main import main
@@ -61,6 +68,7 @@ from ops.model import (
     Binding,
     BlockedStatus,
     Container,
+    Secret,
     SecretNotFoundError,
     TooManyRelatedAppsError,
     WaitingStatus,
@@ -76,6 +84,8 @@ WORKLOAD_CONTAINER = "jimm"
 REQUIRED_SETTINGS = {
     "JIMM_UUID": "missing uuid configuration",
     "JIMM_DSN": "missing postgresql relation",
+    "JIMM_JWKS_PATH": "missing JWKS configuration",
+    "JIMM_JWKS_PRIVATE_KEY_PATH": "missing JWKS private key configuration",
     "OPENFGA_STORE": "missing openfga relation",
     "OPENFGA_AUTH_MODEL": "waiting for OpenFGA auth model creation",
     "OPENFGA_HOST": "missing openfga relation",
@@ -99,12 +109,37 @@ OAUTH_GRANT_TYPES = ["authorization_code", "refresh_token", "urn:ietf:params:oau
 VAULT_NONCE_SECRET_LABEL = "nonce"
 # Template for storing trusted certificate in a file.
 TRUSTED_CA_PATH = Path("/usr/local/share/ca-certificates/trusted-ca-certs.crt")
+JWKS_PATH = Path("/var/lib/jimm/jwks/jwks.json")
+JWKS_PRIVATE_KEY_PATH = Path("/var/lib/jimm/jwks/private-key.pem")
 SESSION_KEY_SECRET_LABEL = "session_key"
 HOST_KEY_SECRET_LABEL = "host_key"
 # Keys should be lowercase letters and digits, at least 3 characters long,
 # start with a letter, and not start or end with a hyphen.
 SESSION_KEY_LOOKUP = "sessionkey"
 HOST_KEY_LOOKUP = "hostkey"
+# Fixed application secret labels used to alternate JWKS signing key material.
+JWKS_SECRET_LABELS = ("jwks-key-0", "jwks-key-1")
+# Secret content keys for the public/private key material and its stable key id.
+JWKS_KID_LOOKUP = "kid"
+JWKS_PUBLIC_JWK_LOOKUP = "publicjwk"
+JWKS_PRIVATE_KEY_LOOKUP = "privatekey"
+# Secret content keys that define when a key starts signing and expires.
+JWKS_ACTIVATE_AT_LOOKUP = "activateat"
+JWKS_EXPIRES_AT_LOOKUP = "expiresat"
+
+# JWKS Rotation time diagram
+# Seed key 0     Add key 1    Activate Key 1    Expire Key 0
+#     |              |              |               |
+# ----o--------------o--------------o---------------o------> Time
+#     ^              ^              ^               ^
+#    T=0          T=day 83     T=day 83 + 6h     T=day 90
+
+# How long one signing key remains valid.
+JWKS_ROTATION_PERIOD = timedelta(days=90)
+# How far ahead of expiry the next public key is published for controllers to fetch.
+JWKS_PRE_ROTATION_INTERVAL = timedelta(days=7)
+# Delay between publishing a new public key and using its private key for signing.
+JWKS_PROPAGATION_DELAY = timedelta(hours=6)
 CERTIFICATE_TRANSFER_INTEGRATION_NAME = "receive-ca-cert"
 
 
@@ -113,6 +148,19 @@ class DeferError(Exception):
     if the hook needs to be retried."""
 
     pass
+
+
+@dataclass(frozen=True)
+class JWKSSecret:
+    # Materialized view of one Juju secret holding a single JWKS signing key lifecycle.
+    activate_at: datetime
+    expires_at: datetime
+    kid: str
+    label: str | None
+    private_key: str
+    public_jwk: dict[str, str]
+    secret: Secret
+    secret_id: str
 
 
 class JimmOperatorCharm(CharmBase):
@@ -131,6 +179,7 @@ class JimmOperatorCharm(CharmBase):
         self.framework.observe(self.on.start, self._on_start)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on.secret_changed, self.on_secret_changed)
+        self.framework.observe(self.on.secret_remove, self._on_secret_remove)
         self.framework.observe(self.on.rotate_session_key_action, self.rotate_session_secret_key)
 
         self.framework.observe(
@@ -313,6 +362,8 @@ class JimmOperatorCharm(CharmBase):
             private_key: bytes = generate_private_key(key_size=4096)
             self._state.private_key = private_key.decode()
 
+        self.ensure_jwks_secret_key()
+
         self._update_workload(event)
 
     def _vault_config(self) -> dict | None:
@@ -418,6 +469,14 @@ class JimmOperatorCharm(CharmBase):
             event.defer()
             return
 
+        jwks_config = self._jwks_config()
+        if not jwks_config:
+            logger.warning("JWKS secret is not ready yet")
+            self.unit.status = BlockedStatus("Waiting for JWKS secret")
+            event.defer()
+            return
+        self._write_jwks_files(container, jwks_config)
+
         # Update the ssh ingress to reflect ssh port config changed. This is done in the leader unit
         # because the ingress is per-unit and it doesn't support multiple units.
         if self.unit.is_leader():
@@ -438,6 +497,8 @@ class JimmOperatorCharm(CharmBase):
             "JIMM_DNS_NAME": dns_name,
             "JIMM_DSN": self._make_database_dsn(),
             "JIMM_JWT_EXPIRY": self.config.get("jwt-expiry"),
+            "JIMM_JWKS_PATH": str(JWKS_PATH),
+            "JIMM_JWKS_PRIVATE_KEY_PATH": str(JWKS_PRIVATE_KEY_PATH),
             "JIMM_LISTEN_ADDR": ":8080",
             "JIMM_INTERNAL_LISTEN_ADDR": ":9090",
             "JIMM_LOG_LEVEL": self.config.get("log-level", ""),
@@ -533,6 +594,19 @@ class JimmOperatorCharm(CharmBase):
                 }
             )
 
+    def _write_jwks_files(self, container: Container, jwks_config: dict[str, str]) -> None:
+        self._push_file_if_changed(container, JWKS_PATH, jwks_config["jwks"])
+        self._push_file_if_changed(container, JWKS_PRIVATE_KEY_PATH, jwks_config["private_key"])
+
+    def _push_file_if_changed(self, container: Container, path: Path, content: str) -> None:
+        try:
+            existing = container.pull(path).read()
+        except pebble.PathError:
+            existing = None
+
+        if existing != content:
+            container.push(path, content, make_dirs=True)
+
     def ensure_session_secret_key(self):
         if not self.unit.is_leader():
             return
@@ -540,6 +614,12 @@ class JimmOperatorCharm(CharmBase):
             self.model.get_secret(label=SESSION_KEY_SECRET_LABEL)
         except SecretNotFoundError:
             self.app.add_secret(new_session_key(), label=SESSION_KEY_SECRET_LABEL)
+
+    def ensure_jwks_secret_key(self) -> None:
+        if not self.unit.is_leader() or not self._state.is_ready():
+            return
+        # The leader owns key generation and publishes the current secret ids through peer data.
+        self._reconcile_jwks_secrets()
 
     def rotate_session_secret_key(self, event: ActionEvent):
         if not self.unit.is_leader():
@@ -572,8 +652,7 @@ class JimmOperatorCharm(CharmBase):
         Fired on all units observing a secret after the owner of a secret has published a new revision.
         We must ensure the secret content is refreshed either here or where we fetch the secret.
         """
-        # Force a refresh of the secret content to flush old data.
-        self.model.get_secret(label=SESSION_KEY_SECRET_LABEL).get_content(refresh=True)
+        event.secret.get_content(refresh=True)
         self._update_workload(event)
 
     def _on_start(self, event):
@@ -599,6 +678,9 @@ class JimmOperatorCharm(CharmBase):
 
     def _on_update_status(self, event) -> None:
         """Update the status of the charm."""
+        if self.unit.is_leader() and self._state.is_ready():
+            self._reconcile_jwks_secrets()
+
         # update vault relation if exists
         binding = self.model.get_binding("vault-kv")
         if binding is not None:
@@ -971,6 +1053,127 @@ class JimmOperatorCharm(CharmBase):
             return subnets
         raise ValueError("unknown egress subnet")
 
+    def _on_secret_remove(self, event: SecretRemoveEvent):
+        # All observers are done with this revision, remove it:
+        event.remove_revision()
+
+    def _now(self) -> datetime:
+        return datetime.now(timezone.utc)
+
+    def _jwks_config(self) -> dict[str, str] | None:
+        """Return the currently published JWKS payload and active signing key.
+
+        The returned JWKS contains every public key that should still be advertised,
+        including any pre-rotated key during the overlap window. The private key is
+        always taken from the newest key whose activation time has passed. This
+        method is read-only; leader hooks reconcile the secret lifecycle separately.
+        Returns ``None`` until the charm has enough secret state to configure the
+        workload.
+        """
+        secrets = self._load_jwks_secrets(refresh=True)
+        if not secrets:
+            return None
+
+        now = self._now()
+        # Every extant key is published until expiry.
+        published = sorted(
+            [secret for secret in secrets if now < secret.expires_at],
+            key=lambda secret: secret.activate_at,
+        )
+        if not published:
+            return None
+
+        active = [secret for secret in published if secret.activate_at <= now]
+        if not active:
+            return None
+
+        # JIMM signs with the newest active key but serves every still-published public key.
+        jwks = json.dumps({"keys": [secret.public_jwk for secret in published]}, separators=(",", ":"))
+        return {"jwks": jwks, "private_key": active[-1].private_key}
+
+    def _reconcile_jwks_secrets(self) -> None:
+        """Progress JWKS signing keys through their lifecycle and publish the active set of public keys.
+
+        JWKS rotation keeps at most two fixed-labeled Juju secrets and moves each key
+        through four phases. First, the leader seeds or pre-publishes a key so its
+        public JWK appears in the JWKS document. Second, after the propagation delay,
+        that key becomes the active signer while older public keys may still be
+        advertised. Third, once a newer key is active, older public keys remain
+        published until their original expiry time so recently issued tokens can still
+        be validated. Finally, once a key expires, it is not advertised and it slot
+        becomes eligible for reuse by the next rotation.
+        """
+        now = self._now()
+        existing = self._load_jwks_secrets(refresh=True)
+        live = [secret for secret in existing if secret.expires_at > now]
+
+        if not live:
+            # Seed the very first signing key immediately so the workload can start.
+            activate_at = now
+            expires_at = now + JWKS_ROTATION_PERIOD
+            self._write_jwks_secret(self._next_jwks_slot_label(existing), new_jwks_secret(activate_at, expires_at))
+            return
+
+        latest = max(live, key=lambda secret: secret.activate_at)
+        future = [secret for secret in live if secret.activate_at > now]
+
+        pre_rotation_starts_at = latest.expires_at - JWKS_PRE_ROTATION_INTERVAL
+        if now >= pre_rotation_starts_at and not future:
+            # Prepublish the next key, ensuring we wait >> JIMM's HTTP cache duration
+            # duration before allowing it to become the active signing key.
+            activate_at = now + JWKS_PROPAGATION_DELAY
+            expires_at = now + JWKS_ROTATION_PERIOD
+            self._write_jwks_secret(self._next_jwks_slot_label(live), new_jwks_secret(activate_at, expires_at))
+
+    def _next_jwks_slot_label(self, secrets: list[JWKSSecret]) -> str:
+        if not secrets:
+            return JWKS_SECRET_LABELS[0]
+        latest = max(secrets, key=lambda secret: secret.activate_at)
+        if latest.label == JWKS_SECRET_LABELS[0]:
+            return JWKS_SECRET_LABELS[1]
+        return JWKS_SECRET_LABELS[0]
+
+    def _write_jwks_secret(self, label: str, content: dict[str, str]):
+        try:
+            secret = self.model.get_secret(label=label)
+        except SecretNotFoundError:
+            return self.app.add_secret(content, label=label)
+
+        secret.set_content(content)
+
+    def _load_jwks_secrets(self, refresh: bool) -> list[JWKSSecret]:
+        secrets: list[JWKSSecret] = []
+        for label in JWKS_SECRET_LABELS:
+            try:
+                secret = self.model.get_secret(label=label)
+                content = secret.get_content(refresh=refresh)
+            except SecretNotFoundError:
+                continue
+            secrets.append(self._jwks_secret_from_content(secret=secret, content=content, label=label))
+        return secrets
+
+    def _jwks_secret_content(self, secret: JWKSSecret) -> dict[str, str]:
+        return {
+            JWKS_ACTIVATE_AT_LOOKUP: secret.activate_at.isoformat(),
+            JWKS_EXPIRES_AT_LOOKUP: secret.expires_at.isoformat(),
+            JWKS_KID_LOOKUP: secret.kid,
+            JWKS_PRIVATE_KEY_LOOKUP: secret.private_key,
+            JWKS_PUBLIC_JWK_LOOKUP: json.dumps(secret.public_jwk, separators=(",", ":"), sort_keys=True),
+        }
+
+    def _jwks_secret_from_content(self, secret: Secret, content: dict[str, str], label: str | None) -> JWKSSecret:
+        secret_id = secret.id or label or content[JWKS_KID_LOOKUP]
+        return JWKSSecret(
+            activate_at=datetime.fromisoformat(content[JWKS_ACTIVATE_AT_LOOKUP]),
+            expires_at=datetime.fromisoformat(content[JWKS_EXPIRES_AT_LOOKUP]),
+            kid=content[JWKS_KID_LOOKUP],
+            label=label,
+            private_key=content[JWKS_PRIVATE_KEY_LOOKUP],
+            public_jwk=json.loads(content[JWKS_PUBLIC_JWK_LOOKUP]),
+            secret=secret,
+            secret_id=secret_id,
+        )
+
 
 def new_session_key():
     """Generate a session secret dict which holds a key value pair used for securing session tokens."""
@@ -982,6 +1185,26 @@ def new_host_key():
     The key is a 4096 bit RSA key generated using the charm's tls_certificates library using.
     """
     return {HOST_KEY_LOOKUP: generate_private_key(key_size=4096).decode()}
+
+
+def new_jwks_secret(activate_at: datetime, expires_at: datetime) -> dict[str, str]:
+    # Each Juju secret stores one signing key plus its activate/expiry timestamps.
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    public_jwk = CryptographyRSAKey(private_pem.encode(), Algorithms.RS256).public_key().to_dict()
+    kid = str(uuid4())
+    public_jwk.update({"alg": "RS256", "kid": kid, "use": "sig"})
+    return {
+        JWKS_ACTIVATE_AT_LOOKUP: activate_at.isoformat(),
+        JWKS_EXPIRES_AT_LOOKUP: expires_at.isoformat(),
+        JWKS_KID_LOOKUP: kid,
+        JWKS_PRIVATE_KEY_LOOKUP: private_pem,
+        JWKS_PUBLIC_JWK_LOOKUP: json.dumps(public_jwk, separators=(",", ":"), sort_keys=True),
+    }
 
 
 def ensureFQDN(dns: str) -> str:  # noqa: N802
