@@ -344,10 +344,12 @@ class JimmOperatorCharm(CharmBase):
         )
         self.ensure_session_secret_key()
         self.ensure_hostkey_secret_key()
+        self.ensure_jwks_secret_key()
 
     def _on_upgrade(self, event: UpgradeCharmEvent) -> None:
         self.ensure_session_secret_key()
         self.ensure_hostkey_secret_key()
+        self.ensure_jwks_secret_key()
 
     def _on_secret_changed(self, event: SecretChangedEvent) -> None:
         # Update the workload if ssh-host-key-secret-id is set in the config and the secret-changed event is fired.
