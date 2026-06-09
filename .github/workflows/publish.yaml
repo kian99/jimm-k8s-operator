@@ -18,6 +18,9 @@ jobs:
     name: Release charm
     needs:
       - charm-tests
+    permissions:
+      contents: write # Needed to tag the release
+      packages: read # Needed to log into ghcr.io
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     steps:
