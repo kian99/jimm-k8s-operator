@@ -781,7 +781,7 @@ class JimmOperatorCharm(CharmBase):
 
     @requires_state
     def _get_dns_name(self, event) -> str:
-        return self.ingress.url or str(self.config.get("dns-name", ""))
+        return (self.ingress.url or str(self.config.get("dns-name", ""))).rstrip("/")
 
     def _get_host_key(self) -> str:
         """

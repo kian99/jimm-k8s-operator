@@ -550,6 +550,10 @@ class TestCharm(TestCase):
         oauth_client = self.harness.charm._oauth_client_config
         self.assertEqual(oauth_client.redirect_uri, "https://jimm.com/some/path/auth/callback")
 
+        self.harness.update_config({"dns-name": "https://jimm.com/"})
+        oauth_client = self.harness.charm._oauth_client_config
+        self.assertEqual(oauth_client.redirect_uri, "https://jimm.com/auth/callback")
+
     def test_app_enters_block_states_if_oauth_relation_removed(self):
         self.harness.update_config(MINIMAL_CONFIG)
         self.harness.remove_relation(self.oauth_rel_id)
