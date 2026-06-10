@@ -567,6 +567,21 @@ class TestCharm(TestCase):
         self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
         self.assertEqual(self.harness.charm.unit.status.message, "Waiting for OAuth relation")
 
+    def test_ssh_ingress_is_published_before_oauth_ready(self):
+        self.harness.update_config(MINIMAL_CONFIG)
+        self.harness.remove_relation(self.oauth_rel_id)
+        container = self.harness.model.unit.get_container("jimm")
+
+        with mock.patch.object(
+            self.harness.charm.ingress_ssh,
+            "provide_ingress_requirements",
+        ) as provide_requirements:
+            self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        provide_requirements.assert_called_once_with(port=self.harness.charm._ssh_port)
+        self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
+        self.assertEqual(self.harness.charm.unit.status.message, "Waiting for OAuth relation")
+
     def test_app_enters_block_state_if_oauth_relation_not_ready(self):
         self.harness.update_config(MINIMAL_CONFIG)
         self.harness.remove_relation(self.oauth_rel_id)

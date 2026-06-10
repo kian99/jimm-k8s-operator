@@ -4,6 +4,7 @@
 
 import logging
 import re
+import secrets
 import socket
 from pathlib import Path
 from typing import Optional
@@ -12,9 +13,7 @@ import pytest
 from oauth_tools import (
     ExternalIdpService,
     access_application_login_page,
-    complete_auth_code_login,
     get_cookie_from_browser_by_name,
-    verify_page_loads,
 )
 from playwright.async_api import BrowserContext, Page
 from pytest_operator.plugin import OpsTest
@@ -22,6 +21,7 @@ from utils import deploy_jimm, get_jimm, get_jimm_address, get_service_external_
 
 pytest_plugins = ["oauth_tools.fixtures"]
 logger = logging.getLogger(__name__)
+LOCAL_TEST_USER_PASSWORD = "Password123"
 
 
 @pytest.mark.skip_if_deployed
@@ -53,18 +53,35 @@ async def test_jimm_oauth_browser_login(
     charm,
     page: Page,
     context: BrowserContext,
-    user_email: str,
-    ext_idp_service: ExternalIdpService,
 ):
     """Run a playwright test to perform the browser login flow and confirm the session cookie is valid."""
 
     jimm_address = await get_jimm_address(ops_test)
+    local_user_email = f"test-{secrets.token_hex(4)}@example.com"
 
     logger.info("running browser flow login test")
 
     await access_application_login_page(page=page, url=f"{jimm_address}/auth/login")
-    logger.info("completing external idp login")
-    await complete_auth_code_login(page=page, ops_test=ops_test, ext_idp_service=ext_idp_service)
+    logger.info("registering a local identity user")
+    await page.wait_for_url(re.compile(r"^https://[^/]+/ui/login.*$"))
+    async with page.expect_navigation(wait_until="domcontentloaded"):
+        await page.get_by_role("link", name="Register").click()
+    await page.get_by_role("textbox").fill(local_user_email)
+    await page.get_by_role("button", name="Sign up").click()
+    await page.get_by_placeholder("Your password").nth(0).fill(LOCAL_TEST_USER_PASSWORD)
+    await page.get_by_placeholder("Your password").nth(1).fill(LOCAL_TEST_USER_PASSWORD)
+    async with page.expect_navigation(wait_until="domcontentloaded"):
+        await page.get_by_role("button", name="Next").click()
+
+    logger.info("logging into JIMM with the registered user")
+    await access_application_login_page(page=page, url=f"{jimm_address}/auth/login")
+    await page.wait_for_url(re.compile(r"^https://[^/]+/ui/login.*$"))
+    await page.get_by_placeholder("Your Email").fill(local_user_email)
+    async with page.expect_navigation(wait_until="domcontentloaded"):
+        await page.get_by_role("button", name="Continue").click()
+    await page.get_by_placeholder("Your Password").fill(LOCAL_TEST_USER_PASSWORD)
+    async with page.expect_navigation(wait_until="domcontentloaded"):
+        await page.get_by_role("button", name="Sign in").click()
 
     logger.info("waiting for browser flow to return to JIMM")
     await page.wait_for_url(re.compile(rf"^{re.escape(jimm_address)}/(?:auth/callback|debug/info)(?:[/?#].*)?$"))
@@ -87,12 +104,8 @@ async def test_jimm_oauth_browser_login(
         cookies={"jimm-browser-session": jimm_session_cookie},
     )
     assert request.status_code == 200
-    assert request.json()["email"] == user_email
-
-    redirect_url = f"{jimm_address}/debug/info"
-    logger.info(f"loading authenticated JIMM page at {redirect_url}")
-    await page.goto(redirect_url)
-    await verify_page_loads(page=page, url=redirect_url)
+    assert request.json()["email"] == local_user_email
+    assert page.url.startswith(f"{jimm_address}/debug/info")
 
     # check ssh server is opened.
     # TODO(simonedutto): once the juju implementation is working, we should test it properly.
