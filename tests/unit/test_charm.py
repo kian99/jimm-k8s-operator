@@ -120,7 +120,6 @@ BASE_ENV = {
     "JIMM_OAUTH_CLIENT_SECRET": OAUTH_CLIENT_SECRET,
     "JIMM_OAUTH_ISSUER_URL": OAUTH_PROVIDER_INFO["issuer_url"],
     "JIMM_OAUTH_SCOPES": OAUTH_PROVIDER_INFO["scope"],
-    "JIMM_OIDC_GROUP_CLAIM_KEY": "groups",
     "JIMM_SECURE_SESSION_COOKIES": True,
     "JIMM_SESSION_COOKIE_MAX_AGE": 86400,
     "JIMM_SESSION_SECRET_KEY": "test-secret",
@@ -539,6 +538,18 @@ class TestCharm(TestCase):
         plan = self.harness.get_container_pebble_plan("jimm")
         env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
         self.assertEqual(env["JIMM_OAUTH_SCOPES"], "email groups offline_access openid profile")
+
+    def test_oidc_group_claim_key_rendered_when_configured(self):
+        self.start_minimal_jimm()
+
+        self.harness.update_config({"oidc-group-claim-key": "groups"})
+
+        container = self.harness.model.unit.get_container("jimm")
+        self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
+        self.assertEqual(env["JIMM_OIDC_GROUP_CLAIM_KEY"], "groups")
 
     def test_ssh_config(self):
         self.start_minimal_jimm()
