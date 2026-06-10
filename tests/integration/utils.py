@@ -5,14 +5,10 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Dict, cast
+from typing import Dict
 
 import requests
 import yaml
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
 from juju.unit import Unit
 from oauth_tools import ExternalIdpService
 from pytest_operator.plugin import OpsTest
@@ -31,34 +27,7 @@ IDENTITY_PLATFORM_APPS = [
     "traefik-admin",
     "traefik-public",
 ]
-IDENTITY_FOUNDATIONAL_APPS = [
-    "postgresql-k8s",
-    "self-signed-certificates",
-    "traefik-admin",
-    "traefik-public",
-]
 IDENTITY_PLATFORM_ALL_APPS = IDENTITY_PLATFORM_APPS + ["kratos-external-idp-integrator"]
-IDENTITY_TRAEFIK_PLACEHOLDER_HOSTS = {
-    "traefik-admin": "traefik-admin.localhost",
-    "traefik-public": "traefik-public.localhost",
-}
-IDENTITY_ROUTE_DEPENDENT_RELATIONS = [
-    ("kratos:hydra-endpoint-info", "hydra:hydra-endpoint-info"),
-    (
-        "identity-platform-login-ui-operator:hydra-endpoint-info",
-        "hydra:hydra-endpoint-info",
-    ),
-    (
-        "identity-platform-login-ui-operator:ui-endpoint-info",
-        "hydra:ui-endpoint-info",
-    ),
-    (
-        "identity-platform-login-ui-operator:ui-endpoint-info",
-        "kratos:ui-endpoint-info",
-    ),
-    ("identity-platform-login-ui-operator:kratos-info", "kratos:kratos-info"),
-]
-SELF_SIGNED_CA_SECRET_LABEL = "ca-certificates"
 JIMM_REQUEST_KWARGS = {"timeout": 30}
 
 
@@ -79,109 +48,6 @@ async def get_unit_data(ops_test: OpsTest, unit_name: str) -> dict:
 async def get_app_config(ops_test: OpsTest, app_name: str) -> dict:
     _, stdout, _ = await ops_test.juju("config", app_name, "--format=yaml")
     return yaml.safe_load(stdout)
-
-
-async def list_secrets(ops_test: OpsTest) -> dict:
-    _, stdout, _ = await ops_test.juju("list-secrets", "--format=yaml")
-    return yaml.safe_load(stdout)
-
-
-async def show_secret(ops_test: OpsTest, secret_id: str) -> dict:
-    _, stdout, _ = await ops_test.juju("show-secret", secret_id, "--reveal", "--format=yaml")
-    return yaml.safe_load(stdout)
-
-
-async def get_ca_secret_content(ops_test: OpsTest) -> dict:
-    secrets = await list_secrets(ops_test)
-    secret_id = next(
-        secret_id
-        for secret_id, metadata in secrets.items()
-        if metadata.get("owner") == "self-signed-certificates"
-        and metadata.get("label") == SELF_SIGNED_CA_SECRET_LABEL
-    )
-    secret = await show_secret(ops_test, secret_id)
-    return secret[secret_id]["content"]
-
-
-def build_signed_certificate(
-    ca_certificate_pem: str,
-    ca_private_key_pem: str,
-    ca_private_key_password: str,
-    hostname: str,
-    extra_hostnames: list[str] | None = None,
-) -> tuple[str, str]:
-    """Generate a leaf certificate signed by the self-signed-certificates CA."""
-    ca_cert = x509.load_pem_x509_certificate(ca_certificate_pem.encode())
-    ca_key = cast(
-        rsa.RSAPrivateKey,
-        serialization.load_pem_private_key(
-        ca_private_key_pem.encode(),
-        password=ca_private_key_password.encode(),
-        ),
-    )
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    names = [hostname]
-    if extra_hostnames:
-        names.extend(extra_hostnames)
-    unique_names = sorted(set(names))
-
-    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, hostname)])
-    certificate = (
-        x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(ca_cert.subject)
-        .public_key(private_key.public_key())
-        .serial_number(x509.random_serial_number())
-        .not_valid_before(ca_cert.not_valid_before_utc)
-        .not_valid_after(ca_cert.not_valid_after_utc)
-        .add_extension(
-            x509.SubjectAlternativeName([x509.DNSName(name) for name in unique_names]),
-            critical=False,
-        )
-        .sign(private_key=ca_key, algorithm=hashes.SHA256())
-    )
-
-    certificate_pem = certificate.public_bytes(serialization.Encoding.PEM).decode()
-    private_key_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode()
-    return certificate_pem, private_key_pem
-
-
-async def configure_traefik_tls(
-    ops_test: OpsTest,
-    app_name: str,
-    hostname: str,
-    extra_hostnames: list[str] | None = None,
-) -> None:
-    """Configure a Traefik app with a CA-signed certificate for the given hostnames."""
-    ca_secret = await get_ca_secret_content(ops_test)
-    certificate_pem, private_key_pem = build_signed_certificate(
-        ca_certificate_pem=ca_secret["ca-certificate"],
-        ca_private_key_pem=ca_secret["private-key"],
-        ca_private_key_password=ca_secret["private-key-password"],
-        hostname=hostname,
-        extra_hostnames=extra_hostnames,
-    )
-    await ops_test.model.applications[app_name].set_config(
-        {
-            "external_hostname": hostname,
-            "tls-cert": certificate_pem,
-            "tls-key": private_key_pem,
-            "tls-ca": ca_secret["ca-certificate"],
-        }
-    )
-
-
-async def configure_traefik_http(
-    ops_test: OpsTest,
-    app_name: str,
-    hostname: str,
-) -> None:
-    """Configure a Traefik app to publish an HTTP host without TLS termination."""
-    await ops_test.model.applications[app_name].set_config({"external_hostname": hostname})
 
 
 async def get_jimm_address(ops_test: OpsTest) -> str:
@@ -346,29 +212,24 @@ async def deploy_identity_bundle(
     """Deploy and configure the identity bundle used by integration tests."""
     await ops_test.run("juju", "deploy", bundle_url, "--trust")
 
-    await asyncio.gather(
-        *[
-            ops_test.model.applications[app_name].set_config({"external_hostname": hostname})
-            for app_name, hostname in IDENTITY_TRAEFIK_PLACEHOLDER_HOSTS.items()
-        ]
-    )
-
-    logger.info("Waiting for foundational identity applications")
-    await wait_for_applications(ops_test, IDENTITY_FOUNDATIONAL_APPS)
+    logger.info("Waiting for the identity platform to deploy")
+    await wait_for_applications(ops_test, IDENTITY_PLATFORM_APPS)
 
     admin_external_ip = await wait_for_service_external_ip(ops_test, "traefik-admin-lb")
     public_external_ip = await wait_for_service_external_ip(ops_test, "traefik-public-lb")
     await asyncio.gather(
-        configure_traefik_http(ops_test, "traefik-admin", f"{admin_external_ip}.sslip.io"),
-        configure_traefik_tls(ops_test, "traefik-public", f"{public_external_ip}.sslip.io", ["traefik-public.localhost"]),
+        ops_test.model.applications["traefik-admin"].set_config(
+            {"external_hostname": f"{admin_external_ip}.sslip.io"}
+        ),
+        ops_test.model.applications["traefik-public"].set_config(
+            {"external_hostname": f"{public_external_ip}.sslip.io"}
+        ),
     )
+
+    await wait_for_applications(ops_test, IDENTITY_PLATFORM_APPS)
 
     # Hydra dev mode is only needed during the placeholder-host bootstrap.
     await ops_test.juju("config", "hydra", "dev=false")
-
-    logger.info("Adding route-dependent identity relations")
-    for endpoint_one, endpoint_two in IDENTITY_ROUTE_DEPENDENT_RELATIONS:
-        await ops_test.model.integrate(endpoint_one, endpoint_two)
 
     await wait_for_applications(ops_test, IDENTITY_PLATFORM_APPS)
 
@@ -473,14 +334,19 @@ async def deploy_jimm(
     logger.info("adding oauth relation")
     await ops_test.model.integrate(f"{APP_NAME}:oauth", hydra_app_name)
 
+    logger.info("adding traefik certificates relation")
+    await ops_test.model.integrate(
+        f"{HTTP_INGRESS_APP_NAME}:certificates",
+        f"{self_signed_certificates_app_name}:certificates",
+    )
+
     logger.info("configuring dedicated traefik http ingress")
     traefik_external_ip = await wait_for_service_external_ip(ops_test, HTTP_INGRESS_SERVICE_NAME)
-    await ops_test.model.applications[HTTP_INGRESS_APP_NAME].set_config({"routing_mode": "subdomain"})
-    await configure_traefik_tls(
-        ops_test,
-        HTTP_INGRESS_APP_NAME,
-        f"{traefik_external_ip}.sslip.io",
-        ["traefik.localhost"],
+    await ops_test.model.applications[HTTP_INGRESS_APP_NAME].set_config(
+        {
+            "routing_mode": "subdomain",
+            "external_hostname": f"{traefik_external_ip}.sslip.io",
+        }
     )
 
     logger.info("adding traefik http relation")

@@ -657,82 +657,25 @@ class CertificateTransferRequires(Object):
 
     def is_ready(self, relation: Relation) -> bool:
         """Check if the relation is ready by checking that it has valid relation data."""
+        databag = relation.data[relation.app]
         try:
-            self._get_relation_data(relation)
+            ProviderApplicationData().load(databag)
             return True
         except DataValidationError:
             return False
-
-    def _get_v0_relation_data(self, relation: Relation) -> Set[str]:
-        """Load certificates from a v0 provider databag.
-
-        Older providers may write the certificate set into either the application
-        databag or a unit databag, so check both without mutating relation.units.
-        """
-        databags = [relation.data[relation.app]]
-        databags.extend(relation.data.get(unit, {}) for unit in relation.units)
-
-        last_error: DataValidationError | None = None
-        for databag in databags:
-            if not databag:
-                continue
-            legacy_certs = self._get_legacy_relation_data(databag)
-            if legacy_certs is not None:
-                return legacy_certs
-            try:
-                certs = ProviderUnitDataV0.load(databag).chain
-                if certs is None:
-                    return set()
-                return set(certs)
-            except DataValidationError as exc:
-                last_error = exc
-
-        if last_error is not None:
-            raise last_error
-        return set()
-
-    @staticmethod
-    def _get_legacy_relation_data(databag: MutableMapping) -> Optional[Set[str]]:
-        """Parse legacy raw-string CA transfer databags.
-
-        Some older providers send the CA PEM as a plain string in `ca` and an optional
-        JSON-encoded `chain` list without the v0 `certificate` field or JSON encoding
-        for every value. Accept that shape for backwards compatibility.
-        """
-        ca = databag.get("ca")
-        chain = databag.get("chain")
-        certificate = databag.get("certificate")
-        if ca is None and chain is None and certificate is None:
-            return None
-
-        certificates: List[str] = []
-        if isinstance(chain, str) and chain:
-            try:
-                parsed_chain = json.loads(chain)
-                if isinstance(parsed_chain, list):
-                    certificates.extend(cert for cert in parsed_chain if isinstance(cert, str) and cert)
-            except json.JSONDecodeError:
-                certificates.append(chain)
-
-        if isinstance(certificate, str) and certificate:
-            certificates.append(certificate)
-        if isinstance(ca, str) and ca:
-            certificates.insert(0, ca)
-
-        return set(certificates)
 
     def _get_relation_data(self, relation: Relation) -> Set[str]:
         """Get the given relation data."""
         try:
             databag = relation.data[relation.app]
-            try:
-                certificates = ProviderApplicationData().load(databag).certificates
-            except DataValidationError:
-                return self._get_v0_relation_data(relation)
-
-            if certificates:
-                return certificates
-            return self._get_v0_relation_data(relation)
+            certificates = ProviderApplicationData().load(databag).certificates
+            if not certificates and relation.units:
+                databag = relation.data.get(relation.units.pop(), {})
+                certs = ProviderUnitDataV0.load(databag).chain
+                if certs is None:
+                    return set()
+                return set(certs)
+            return certificates
         except DataValidationError as e:
             logger.error(
                 (

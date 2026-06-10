@@ -57,8 +57,8 @@ applications:
       plugin_btree_gin_enable: true
   self-signed-certificates:
     charm: self-signed-certificates
-    revision: 264
-    channel: latest/stable
+    revision: 588
+    channel: 1/stable
     scale: 1
   traefik-admin:
     charm: traefik-k8s
@@ -85,9 +85,15 @@ applications:
 relations:
   - [hydra:pg-database, postgresql-k8s:database]
   - [kratos:pg-database, postgresql-k8s:database]
+  - [kratos:hydra-endpoint-info, hydra:hydra-endpoint-info]
   - [kratos-external-idp-integrator:kratos-external-idp, kratos:kratos-external-idp]
   - [hydra:internal-route, traefik-admin:traefik-route]
   - [hydra:public-route, traefik-public:traefik-route]
   - [kratos:internal-route, traefik-admin:traefik-route]
   - [kratos:public-route, traefik-public:traefik-route]
   - [identity-platform-login-ui-operator:public-route, traefik-public:traefik-route]
+  - [traefik-public:certificates, self-signed-certificates:certificates]
+  - [identity-platform-login-ui-operator:hydra-endpoint-info, hydra:hydra-endpoint-info]
+  - [identity-platform-login-ui-operator:ui-endpoint-info, hydra:ui-endpoint-info]
+  - [identity-platform-login-ui-operator:ui-endpoint-info, kratos:ui-endpoint-info]
+  - [identity-platform-login-ui-operator:kratos-info, kratos:kratos-info]
