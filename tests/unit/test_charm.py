@@ -521,6 +521,25 @@ class TestCharm(TestCase):
         env = plan_dict.get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
         self.assertDictEqual(env, env | expected_values)
 
+    def test_oidc_extra_scopes_included_when_provider_supports(self):
+        self.start_minimal_jimm()
+
+        self.harness.update_relation_data(
+            self.oauth_rel_id,
+            "hydra",
+            {
+                "scope": "email groups offline_access openid profile",
+            },
+        )
+        self.harness.update_config({"oidc-extra-scopes": "groups"})
+
+        container = self.harness.model.unit.get_container("jimm")
+        self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
+        self.assertEqual(env["JIMM_OAUTH_SCOPES"], "email groups offline_access openid profile")
+
     def test_ssh_config(self):
         self.start_minimal_jimm()
         self.harness.update_config(

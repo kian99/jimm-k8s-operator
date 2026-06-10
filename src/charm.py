@@ -458,7 +458,7 @@ class JimmOperatorCharm(CharmBase):
             logger.warning("OAuth provider info is not ready yet")
             self.unit.status = BlockedStatus("Waiting for OAuth provider info")
             return
-        known_scopes = set(OAUTH_SCOPES.split(" "))
+        known_scopes = self._requested_oauth_scopes
         oauth_provider_scopes = set(oauth_provider_info.scope.split(" "))
         scopes = " ".join(sorted(oauth_provider_scopes.intersection(known_scopes)))
 
@@ -975,10 +975,16 @@ class JimmOperatorCharm(CharmBase):
         dns = ensureAbsoluteURL(dns)
         return ClientConfig(
             redirect_uri=urljoin(dns, "auth/callback"),
-            scope=OAUTH_SCOPES,
+            scope=" ".join(sorted(self._requested_oauth_scopes)),
             grant_types=OAUTH_GRANT_TYPES,
             token_endpoint_auth_method="client_secret_post",
         )
+
+    @property
+    def _requested_oauth_scopes(self) -> set[str]:
+        scopes = set(OAUTH_SCOPES.split())
+        scopes.update(str(self.config.get("oidc-extra-scopes", "")).split())
+        return scopes
 
     def get_vault_nonce(self) -> str:
         secret = self.model.get_secret(label=VAULT_NONCE_SECRET_LABEL)

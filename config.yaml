@@ -70,6 +70,12 @@ options:
     default: groups
     description: |
       The OIDC claim name that contains user groups.
+  oidc-extra-scopes:
+    type: string
+    default: ""
+    description: |
+      Space separated extra OIDC scopes to request and forward when
+      supported by the provider.
   session-expiry-duration:
     type: string
     default: 6h
