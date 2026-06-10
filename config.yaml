@@ -67,15 +67,24 @@ options:
       extended by this amount.
   oidc-group-claim-key:
     type: string
-    default: groups
+    default: ""
     description: |
-      The OIDC claim name that contains user groups.
+      This is the claim name to be extracted from the OIDC token that contains the user groups. 
+      This is only relevant if the operator has configured group mapping for the OIDC protocol at
+      the identity provider. If the mapper is not set as a default scope, then it must also be 
+      included in "oidc-extra-scopes".
+
+      When this configuration key is unset, no group scopes are requested.
+
+      Permissions for the groups can be set via the JIMM plugin for the Juju CLI.
   oidc-extra-scopes:
     type: string
     default: ""
     description: |
-      Space separated extra OIDC scopes to request and forward when
-      supported by the provider.
+      Space separated extra OIDC scopes to request and forward when supported by the identity provider, 
+      in addition to any default scopes set by the provider.
+      This is useful for requesting scopes that are not included by default, such as a group claim
+      mapper scope.
   session-expiry-duration:
     type: string
     default: 6h
