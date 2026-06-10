@@ -510,6 +510,7 @@ class JimmOperatorCharm(CharmBase):
             "JIMM_OAUTH_CLIENT_SECRET": oauth_provider_info.client_secret,
             "JIMM_OAUTH_ISSUER_URL": oauth_provider_info.issuer_url,
             "JIMM_OAUTH_SCOPES": scopes,
+            "JIMM_OIDC_GROUP_CLAIM_KEY": self.config.get("oidc-group-claim-key"),
             "JIMM_SECURE_SESSION_COOKIES": self.config.get("secure-session-cookies"),
             "JIMM_SESSION_COOKIE_MAX_AGE": self.config.get("session-cookie-max-age"),
             "JIMM_SESSION_SECRET_KEY": session_key,
