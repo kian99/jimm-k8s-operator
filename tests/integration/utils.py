@@ -79,9 +79,7 @@ async def wait_for_jimm_address(ops_test: OpsTest, timeout: int = 300) -> str:
             response = get_jimm(jimm_address, "/macaroons/publickey")
             if response.status_code == 200:
                 return jimm_address
-            last_error = RuntimeError(
-                f"unexpected status from JIMM smoke check: {response.status_code}"
-            )
+            last_error = RuntimeError(f"unexpected status from JIMM smoke check: {response.status_code}")
         except (requests.RequestException, RuntimeError, KeyError, json.JSONDecodeError) as exc:
             last_error = exc
         await asyncio.sleep(5)
@@ -156,12 +154,14 @@ async def wait_for_applications(
             app_status = app.get("application-status", {}).get("current")
             units = app.get("units", {})
             unit_states = [
-                f"{unit_name}={unit.get('workload-status', {}).get('current')}/{unit.get('juju-status', {}).get('current')}"
+                (
+                    f"{unit_name}="
+                    f"{unit.get('workload-status', {}).get('current')}"
+                    f"/{unit.get('juju-status', {}).get('current')}"
+                )
                 for unit_name, unit in units.items()
             ]
-            snapshot_lines.append(
-                f"{app_name}: app={app_status} units={', '.join(unit_states) or 'none'}"
-            )
+            snapshot_lines.append(f"{app_name}: app={app_status} units={', '.join(unit_states) or 'none'}")
             if app_status != "active":
                 pending.append(app_name)
 
@@ -170,9 +170,7 @@ async def wait_for_applications(
 
         last_snapshot = "\n".join(snapshot_lines)
         if asyncio.get_running_loop().time() >= deadline:
-            raise RuntimeError(
-                "timed out waiting for applications to become active:\n" + last_snapshot
-            )
+            raise RuntimeError("timed out waiting for applications to become active:\n" + last_snapshot)
         await asyncio.sleep(5)
 
 
@@ -218,9 +216,7 @@ async def deploy_identity_bundle(
     admin_external_ip = await wait_for_service_external_ip(ops_test, "traefik-admin-lb")
     public_external_ip = await wait_for_service_external_ip(ops_test, "traefik-public-lb")
     await asyncio.gather(
-        ops_test.model.applications["traefik-admin"].set_config(
-            {"external_hostname": f"{admin_external_ip}.sslip.io"}
-        ),
+        ops_test.model.applications["traefik-admin"].set_config({"external_hostname": f"{admin_external_ip}.sslip.io"}),
         ops_test.model.applications["traefik-public"].set_config(
             {"external_hostname": f"{public_external_ip}.sslip.io"}
         ),
@@ -246,8 +242,8 @@ async def deploy_identity_bundle(
     )
     await wait_for_applications(ops_test, IDENTITY_PLATFORM_ALL_APPS)
 
-    redirect_uri_action = await ops_test.model.applications["kratos-external-idp-integrator"].units[0].run_action(
-        "get-redirect-uri"
+    redirect_uri_action = (
+        await ops_test.model.applications["kratos-external-idp-integrator"].units[0].run_action("get-redirect-uri")
     )
     action_output = await redirect_uri_action.wait()
     assert "redirect-uri" in action_output.results

@@ -39,12 +39,7 @@ async def test_build_and_deploy(
     # (Optionally build) and deploy charm from local source folder
 
     await deploy_jimm(
-        ops_test,
-        charm,
-        hydra_app_name,
-        public_traefik_app_name,
-        self_signed_certificates_app_name,
-        ext_idp_service,
+        ops_test, charm, hydra_app_name, public_traefik_app_name, self_signed_certificates_app_name, ext_idp_service
     )
 
 
