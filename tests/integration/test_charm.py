@@ -30,7 +30,6 @@ async def test_build_and_deploy(
     ops_test: OpsTest,
     charm: Path,
     hydra_app_name: str,
-    public_traefik_app_name: str,
     self_signed_certificates_app_name: str,
     ext_idp_service: ExternalIdpService,
 ) -> None:
@@ -38,9 +37,7 @@ async def test_build_and_deploy(
     # Build and deploy charm from local source folder
     # (Optionally build) and deploy charm from local source folder
 
-    await deploy_jimm(
-        ops_test, charm, hydra_app_name, public_traefik_app_name, self_signed_certificates_app_name, ext_idp_service
-    )
+    await deploy_jimm(ops_test, charm, hydra_app_name, self_signed_certificates_app_name, ext_idp_service)
 
 
 async def test_jimm_oauth_browser_login(

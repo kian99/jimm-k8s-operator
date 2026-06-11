@@ -254,7 +254,6 @@ async def deploy_jimm(
     ops_test: OpsTest,
     charm: Path,
     hydra_app_name: str,
-    public_traefik_app_name: str,
     self_signed_certificates_app_name: str,
     ext_idp_service: ExternalIdpService,
 ) -> None:
