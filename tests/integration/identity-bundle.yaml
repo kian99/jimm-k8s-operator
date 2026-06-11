@@ -15,8 +15,6 @@ applications:
     scale: 1
     series: jammy
     trust: true
-    options:
-      dev: true
   kratos:
     charm: kratos
     revision: 571

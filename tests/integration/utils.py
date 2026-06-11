@@ -224,11 +224,6 @@ async def deploy_identity_bundle(
 
     await wait_for_applications(ops_test, IDENTITY_PLATFORM_APPS)
 
-    # Hydra dev mode is only needed during the placeholder-host bootstrap.
-    await ops_test.juju("config", "hydra", "dev=false")
-
-    await wait_for_applications(ops_test, IDENTITY_PLATFORM_APPS)
-
     logger.info("Configuring the identity platform")
     await ops_test.juju(
         "config",
