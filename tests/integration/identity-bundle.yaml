@@ -8,33 +8,35 @@ issues: https://github.com/canonical/iam-bundle/issues
 applications:
   hydra:
     charm: hydra
-    revision: 339
+    revision: 401
     resources:
-      oci-image: ghcr.io/canonical/hydra:2.3.0-canonical
+      oci-image: 281
     channel: latest/edge
     scale: 1
     series: jammy
     trust: true
   kratos:
     charm: kratos
-    revision: 500
+    revision: 571
     resources:
-      oci-image: ghcr.io/canonical/kratos:1.3.1
+      oci-image: 433
     channel: latest/edge
     scale: 1
     series: jammy
     trust: true
+    options:
+      enforce_mfa: false
   kratos-external-idp-integrator:
     charm: kratos-external-idp-integrator
     channel: latest/edge
-    revision: 245
+    revision: 299
     scale: 1
     series: jammy
   identity-platform-login-ui-operator:
     charm: identity-platform-login-ui-operator
-    revision: 146
+    revision: 203
     resources:
-      oci-image: ghcr.io/canonical/identity-platform-login-ui:v0.21.2
+      oci-image: 100
     channel: latest/edge
     scale: 1
     series: jammy
@@ -42,8 +44,9 @@ applications:
   postgresql-k8s:
     charm: postgresql-k8s
     channel: 14/stable
+    revision: 774
     resources:
-      postgresql-image: ghcr.io/canonical/charmed-postgresql@sha256:e2283194f7f8d9997fb06f0fd1ab0ec3938ce73ac001133bd8fd393ebe83acc7
+      postgresql-image: 184
     series: jammy
     scale: 1
     trust: true
@@ -52,24 +55,24 @@ applications:
       plugin_btree_gin_enable: true
   self-signed-certificates:
     charm: self-signed-certificates
-    revision: 155
-    channel: latest/stable
+    revision: 588
+    channel: 1/stable
     scale: 1
   traefik-admin:
     charm: traefik-k8s
     channel: latest/stable
-    revision: 176
+    revision: 298
     resources:
-      traefik-image: docker.io/ubuntu/traefik:2-22.04
+      traefik-image: 162
     series: focal
     scale: 1
     trust: true
   traefik-public:
     charm: traefik-k8s
     channel: latest/stable
-    revision: 176
+    revision: 298
     resources:
-      traefik-image: docker.io/ubuntu/traefik:2-22.04
+      traefik-image: 162
     series: focal
     scale: 1
     trust: true
@@ -78,14 +81,13 @@ relations:
   - [kratos:pg-database, postgresql-k8s:database]
   - [kratos:hydra-endpoint-info, hydra:hydra-endpoint-info]
   - [kratos-external-idp-integrator:kratos-external-idp, kratos:kratos-external-idp]
-  - [hydra:admin-ingress, traefik-admin:ingress]
-  - [hydra:public-ingress, traefik-public:ingress]
-  - [kratos:admin-ingress, traefik-admin:ingress]
-  - [kratos:public-ingress, traefik-public:ingress]
-  - [identity-platform-login-ui-operator:ingress, traefik-public:ingress]
+  - [hydra:internal-route, traefik-admin:traefik-route]
+  - [hydra:public-route, traefik-public:traefik-route]
+  - [kratos:internal-route, traefik-admin:traefik-route]
+  - [kratos:public-route, traefik-public:traefik-route]
+  - [identity-platform-login-ui-operator:public-route, traefik-public:traefik-route]
+  - [traefik-public:certificates, self-signed-certificates:certificates]
   - [identity-platform-login-ui-operator:hydra-endpoint-info, hydra:hydra-endpoint-info]
   - [identity-platform-login-ui-operator:ui-endpoint-info, hydra:ui-endpoint-info]
   - [identity-platform-login-ui-operator:ui-endpoint-info, kratos:ui-endpoint-info]
   - [identity-platform-login-ui-operator:kratos-info, kratos:kratos-info]
-  - [traefik-admin:certificates, self-signed-certificates:certificates]
-  - [traefik-public:certificates, self-signed-certificates:certificates]

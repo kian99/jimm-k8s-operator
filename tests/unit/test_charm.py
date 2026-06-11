@@ -550,6 +550,10 @@ class TestCharm(TestCase):
         oauth_client = self.harness.charm._oauth_client_config
         self.assertEqual(oauth_client.redirect_uri, "https://jimm.com/some/path/auth/callback")
 
+        self.harness.update_config({"dns-name": "https://jimm.com/"})
+        oauth_client = self.harness.charm._oauth_client_config
+        self.assertEqual(oauth_client.redirect_uri, "https://jimm.com/auth/callback")
+
     def test_app_enters_block_states_if_oauth_relation_removed(self):
         self.harness.update_config(MINIMAL_CONFIG)
         self.harness.remove_relation(self.oauth_rel_id)
@@ -560,6 +564,21 @@ class TestCharm(TestCase):
         # Check the that the plan is empty
         plan = self.harness.get_container_pebble_plan("jimm")
         self.assertEqual(plan.to_dict(), {})
+        self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
+        self.assertEqual(self.harness.charm.unit.status.message, "Waiting for OAuth relation")
+
+    def test_ssh_ingress_is_published_before_oauth_ready(self):
+        self.harness.update_config(MINIMAL_CONFIG)
+        self.harness.remove_relation(self.oauth_rel_id)
+        container = self.harness.model.unit.get_container("jimm")
+
+        with mock.patch.object(
+            self.harness.charm.ingress_ssh,
+            "provide_ingress_requirements",
+        ) as provide_requirements:
+            self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        provide_requirements.assert_called_once_with(port=self.harness.charm._ssh_port)
         self.assertEqual(self.harness.charm.unit.status.name, BlockedStatus.name)
         self.assertEqual(self.harness.charm.unit.status.message, "Waiting for OAuth relation")
 

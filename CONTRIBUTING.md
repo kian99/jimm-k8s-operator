@@ -73,19 +73,5 @@ Integration tests require the following setup:
 5. A Juju controller on microk8s `juju bootstrap microk8s`
 6. `kubectl` must be installed - `sudo snap install kubectl`
 7. Your kubectl must be configured to talk to microk8s - `microk8s config > ~/.kube/config`
-8. Setup the ability for Microk8s to pull from a private ghcr (Github Container Registry):
-   1. Obtain a Github PAT token that has at least `read:packages` access and can access `github.com/canonical/jimm`.
-   2. Run the following commands (adding values for the username/password placeholders):
-
-          read -r -d '' REGISTRY_CONFIG << EOL || true
-          [plugins."io.containerd.grpc.v1.cri".registry.configs."ghcr.io".auth]
-              username = "<your-username-here>"
-              password = "<your-PAT-token-here>"
-          EOL
-                    
-          echo "$REGISTRY_CONFIG" | sudo tee -a /var/snap/microk8s/current/args/containerd-template.toml
-
-          sudo snap restart microk8s.daemon-containerd
-
-9.  Create the `venv` and install `tox` as described above.
-10. Run the test (optionally keep the model for debugging) - `tox -e integration -- --keep-models`
+8.  Create the `venv` and install `tox` as described above.
+9.  Run the test (optionally keep the model for debugging) - `tox -e integration -- --keep-models`

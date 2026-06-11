@@ -410,6 +410,12 @@ class JimmOperatorCharm(CharmBase):
             event.defer()
             return
 
+        # Publish SSH ingress requirements as soon as Pebble is reachable so
+        # Traefik can provision the per-unit TCP route even while other
+        # relations are still settling.
+        if self.unit.is_leader():
+            self.ingress_ssh.provide_ingress_requirements(port=self._ssh_port)
+
         # Wait for OAuth relations
         self.oauth.update_client_config(client_config=self._oauth_client_config)
         if not self.oauth.is_client_created():
@@ -478,11 +484,6 @@ class JimmOperatorCharm(CharmBase):
             event.defer()
             return
         self._write_jwks_files(container, jwks_config)
-
-        # Update the ssh ingress to reflect ssh port config changed. This is done in the leader unit
-        # because the ingress is per-unit and it doesn't support multiple units.
-        if self.unit.is_leader():
-            self.ingress_ssh.provide_ingress_requirements(port=self._ssh_port)
 
         config_values = {
             "BAKERY_PRIVATE_KEY": self.config.get("private-key", ""),
@@ -781,7 +782,7 @@ class JimmOperatorCharm(CharmBase):
 
     @requires_state
     def _get_dns_name(self, event) -> str:
-        return self.ingress.url or str(self.config.get("dns-name", ""))
+        return (self.ingress.url or str(self.config.get("dns-name", ""))).rstrip("/")
 
     def _get_host_key(self) -> str:
         """
