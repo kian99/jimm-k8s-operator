@@ -5,12 +5,10 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Dict
 
 import requests
 import yaml
-from juju.unit import Unit
-from oauth_tools import ExternalIdpService
+from oauth_tools import ExternalIdpService, deploy_identity_bundle
 from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
@@ -18,16 +16,6 @@ METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
 APP_NAME = "juju-jimm-k8s"
 HTTP_INGRESS_APP_NAME = "traefik"
 HTTP_INGRESS_SERVICE_NAME = "traefik-lb"
-IDENTITY_PLATFORM_APPS = [
-    "hydra",
-    "kratos",
-    "identity-platform-login-ui-operator",
-    "postgresql-k8s",
-    "self-signed-certificates",
-    "traefik-admin",
-    "traefik-public",
-]
-IDENTITY_PLATFORM_ALL_APPS = IDENTITY_PLATFORM_APPS + ["kratos-external-idp-integrator"]
 JIMM_REQUEST_KWARGS = {"timeout": 30}
 
 
@@ -124,56 +112,6 @@ async def wait_for_service_external_ip(ops_test: OpsTest, service_name: str, tim
     raise RuntimeError(f"timed out waiting for service {service_name} external IP") from last_error
 
 
-async def wait_for_applications(
-    ops_test: OpsTest,
-    app_names: list[str],
-    timeout: int = 2000,
-) -> None:
-    """Wait for a set of applications to reach active using Juju CLI polling.
-
-    This avoids libjuju watcher churn and also tolerates transient hook failures
-    while applications are still converging.
-    """
-    deadline = asyncio.get_running_loop().time() + timeout
-    last_snapshot = ""
-
-    while True:
-        _, stdout, _ = await ops_test.juju("status", "--format=yaml")
-        status = yaml.safe_load(stdout)
-        applications = status.get("applications", {})
-
-        pending = []
-        snapshot_lines = []
-        for app_name in app_names:
-            app = applications.get(app_name)
-            if not app:
-                pending.append(app_name)
-                snapshot_lines.append(f"{app_name}: missing")
-                continue
-
-            app_status = app.get("application-status", {}).get("current")
-            units = app.get("units", {})
-            unit_states = [
-                (
-                    f"{unit_name}="
-                    f"{unit.get('workload-status', {}).get('current')}"
-                    f"/{unit.get('juju-status', {}).get('current')}"
-                )
-                for unit_name, unit in units.items()
-            ]
-            snapshot_lines.append(f"{app_name}: app={app_status} units={', '.join(unit_states) or 'none'}")
-            if app_status != "active":
-                pending.append(app_name)
-
-        if not pending:
-            return
-
-        last_snapshot = "\n".join(snapshot_lines)
-        if asyncio.get_running_loop().time() >= deadline:
-            raise RuntimeError("timed out waiting for applications to become active:\n" + last_snapshot)
-        await asyncio.sleep(5)
-
-
 async def get_traefik_address(
     ops_test: OpsTest,
     traefik_app_name: str,
@@ -196,53 +134,6 @@ async def get_traefik_address(
         return f"https://{ops_test.model_name}-{app_name}.{external_hostname}"
 
     return f"https://{external_ip}/{ops_test.model_name}-{app_name}"
-
-
-async def get_unit_by_name(unit_name: str, unit_index: str, unit_list: Dict[str, Unit]) -> Unit:
-    return unit_list.get("{unitname}/{unitindex}".format(unitname=unit_name, unitindex=unit_index))
-
-
-async def deploy_identity_bundle(
-    ops_test: OpsTest,
-    bundle_url: str,
-    ext_idp_service: ExternalIdpService,
-) -> None:
-    """Deploy and configure the identity bundle used by integration tests."""
-    await ops_test.run("juju", "deploy", bundle_url, "--trust")
-
-    logger.info("Waiting for the identity platform to deploy")
-    await wait_for_applications(ops_test, IDENTITY_PLATFORM_APPS)
-
-    admin_external_ip = await wait_for_service_external_ip(ops_test, "traefik-admin-lb")
-    public_external_ip = await wait_for_service_external_ip(ops_test, "traefik-public-lb")
-    await asyncio.gather(
-        ops_test.model.applications["traefik-admin"].set_config({"external_hostname": f"{admin_external_ip}.sslip.io"}),
-        ops_test.model.applications["traefik-public"].set_config(
-            {"external_hostname": f"{public_external_ip}.sslip.io"}
-        ),
-    )
-
-    await wait_for_applications(ops_test, IDENTITY_PLATFORM_APPS)
-
-    logger.info("Configuring the identity platform")
-    await ops_test.juju(
-        "config",
-        "kratos-external-idp-integrator",
-        f"client_id={ext_idp_service.client_id}",
-        f"client_secret={ext_idp_service.client_secret}",
-        "provider=generic",
-        f"issuer_url={ext_idp_service.issuer_url}",
-        "scope=profile email",
-        "provider_id=Dex",
-    )
-    await wait_for_applications(ops_test, IDENTITY_PLATFORM_ALL_APPS)
-
-    redirect_uri_action = (
-        await ops_test.model.applications["kratos-external-idp-integrator"].units[0].run_action("get-redirect-uri")
-    )
-    action_output = await redirect_uri_action.wait()
-    assert "redirect-uri" in action_output.results
-    ext_idp_service.update_redirect_uri(redirect_uri=action_output.results["redirect-uri"])
 
 
 async def deploy_jimm(
@@ -268,6 +159,16 @@ async def deploy_jimm(
     logger.info("deploying identity bundle")
     bundle_path = Path(__file__).parent / "identity-bundle.yaml"
     await deploy_identity_bundle(ops_test=ops_test, bundle_url=str(bundle_path), ext_idp_service=ext_idp_service)
+
+    logger.info("configuring identity bundle ingress hostnames")
+    admin_external_ip, public_external_ip = await asyncio.gather(
+        wait_for_service_external_ip(ops_test, "traefik-admin-lb"),
+        wait_for_service_external_ip(ops_test, "traefik-public-lb"),
+    )
+    await asyncio.gather(
+        ops_test.juju("config", "traefik-admin", f"external_hostname={admin_external_ip}.sslip.io"),
+        ops_test.juju("config", "traefik-public", f"external_hostname={public_external_ip}.sslip.io"),
+    )
 
     # Deploy the charm and wait for active/idle status
     logger.info("deploying charms")
@@ -302,12 +203,11 @@ async def deploy_jimm(
                 "traefik-k8s",
                 application_name="traefik",
                 channel="latest/stable",
-                config={"external_hostname": "traefik.localhost"},
             ),
         )
 
     logger.info("waiting for postgresql")
-    await wait_for_applications(ops_test, ["jimm-db"])
+    await ops_test.model.wait_for_idle(["jimm-db"], raise_on_blocked=False, status="active", timeout=2000)
 
     logger.info("adding custom ca cert relation")
     await ops_test.model.integrate("{}:receive-ca-cert".format(APP_NAME), self_signed_certificates_app_name)

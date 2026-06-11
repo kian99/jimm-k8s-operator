@@ -67,8 +67,6 @@ applications:
     series: focal
     scale: 1
     trust: true
-    options:
-      external_hostname: traefik-admin.localhost
   traefik-public:
     charm: traefik-k8s
     channel: latest/stable
@@ -78,8 +76,6 @@ applications:
     series: focal
     scale: 1
     trust: true
-    options:
-      external_hostname: traefik-public.localhost
 relations:
   - [hydra:pg-database, postgresql-k8s:database]
   - [kratos:pg-database, postgresql-k8s:database]
