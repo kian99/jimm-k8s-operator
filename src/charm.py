@@ -508,9 +508,10 @@ class JimmOperatorCharm(CharmBase):
             "JIMM_MACAROON_EXPIRY_DURATION": self.config.get("macaroon-expiry-duration", "24h"),
             "JIMM_OAUTH_CLIENT_ID": oauth_provider_info.client_id,
             "JIMM_OAUTH_CLIENT_SECRET": oauth_provider_info.client_secret,
+            "JIMM_OAUTH_CLIENT_CREDENTIAL_SCOPES": self.config.get("oauth-client-credential-scopes", ""),
             "JIMM_OAUTH_ISSUER_URL": oauth_provider_info.issuer_url,
             "JIMM_OAUTH_SCOPES": scopes,
-            "JIMM_OIDC_GROUP_CLAIM_KEY": self.config.get("oidc-group-claim-key"),
+            "JIMM_OAUTH_GROUP_CLAIM_KEY": self.config.get("oauth-group-claim-key"),
             "JIMM_SECURE_SESSION_COOKIES": self.config.get("secure-session-cookies"),
             "JIMM_SESSION_COOKIE_MAX_AGE": self.config.get("session-cookie-max-age"),
             "JIMM_SESSION_SECRET_KEY": session_key,
@@ -983,7 +984,7 @@ class JimmOperatorCharm(CharmBase):
     @property
     def _requested_oauth_scopes(self) -> set[str]:
         scopes = set(OAUTH_SCOPES.split())
-        scopes.update(str(self.config.get("oidc-extra-scopes", "")).split())
+        scopes.update(str(self.config.get("auth-optional-scopes", "")).split())
         return scopes
 
     def get_vault_nonce(self) -> str:

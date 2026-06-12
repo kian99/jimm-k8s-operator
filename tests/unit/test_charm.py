@@ -530,7 +530,7 @@ class TestCharm(TestCase):
                 "scope": "email groups offline_access openid profile",
             },
         )
-        self.harness.update_config({"oidc-extra-scopes": "groups"})
+        self.harness.update_config({"auth-optional-scopes": "groups"})
 
         container = self.harness.model.unit.get_container("jimm")
         self.harness.charm.on.jimm_pebble_ready.emit(container)
@@ -542,14 +542,26 @@ class TestCharm(TestCase):
     def test_oidc_group_claim_key_rendered_when_configured(self):
         self.start_minimal_jimm()
 
-        self.harness.update_config({"oidc-group-claim-key": "groups"})
+        self.harness.update_config({"oauth-group-claim-key": "groups"})
 
         container = self.harness.model.unit.get_container("jimm")
         self.harness.charm.on.jimm_pebble_ready.emit(container)
 
         plan = self.harness.get_container_pebble_plan("jimm")
         env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
-        self.assertEqual(env["JIMM_OIDC_GROUP_CLAIM_KEY"], "groups")
+        self.assertEqual(env["JIMM_OAUTH_GROUP_CLAIM_KEY"], "groups")
+
+    def test_oauth_client_credential_scopes_rendered_when_configured(self):
+        self.start_minimal_jimm()
+
+        self.harness.update_config({"oauth-client-credential-scopes": "groups profile"})
+
+        container = self.harness.model.unit.get_container("jimm")
+        self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
+        self.assertEqual(env["JIMM_OAUTH_CLIENT_CREDENTIAL_SCOPES"], "groups profile")
 
     def test_ssh_config(self):
         self.start_minimal_jimm()

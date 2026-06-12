@@ -65,24 +65,35 @@ options:
     description: |
       The max age for the session cookies in seconds, on subsequent logins, the session instance
       extended by this amount.
-  oidc-group-claim-key:
+  oauth-group-claim-key:
     type: string
     default: ""
     description: |
-      This is the claim name to be extracted from the OIDC token that contains the user groups. 
+      This is the claim name to be extracted from the OAuth access token that contains
+      the user groups.
       This is only relevant if the operator has configured group mapping for the OIDC protocol at
-      the identity provider. If the mapper is not set as a default scope, then it must also be 
-      included in "oidc-extra-scopes".
+      the identity provider. 
+      
+      If the mapper is not set as a default scope, then it must also be 
+      included in "auth-optional-scopes" and for client credentials, within "oauth-client-credential-scopes".
 
       When this configuration key is unset, no group scopes are requested.
 
       Permissions for the groups can be set via the JIMM plugin for the Juju CLI.
-  oidc-extra-scopes:
+  oauth-client-credential-scopes:
     type: string
     default: ""
     description: |
-      Space separated extra OIDC scopes to request and forward when supported by the identity provider, 
-      in addition to any default scopes set by the provider.
+      Space separated OAuth scopes requested only for the client credentials flow.
+      These scopes are passed to JIMM via JIMM_OAUTH_CLIENT_CREDENTIAL_SCOPES.
+  auth-optional-scopes:
+    type: string
+    default: ""
+    description: |
+      Space separated optional OAuth scopes to request and forward when supported by the identity provider, 
+      in addition to any default scopes set by the provider. These scopes are only applied to the authorisation
+      code and device code flows.
+
       This is useful for requesting scopes that are not included by default, such as a group claim
       mapper scope.
   session-expiry-duration:
