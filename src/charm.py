@@ -985,9 +985,7 @@ class JimmOperatorCharm(CharmBase):
             token_endpoint_auth_method="client_secret_post",
         )
 
-    def _warn_for_unadvertised_oauth_scopes(
-        self, requested_scopes: set[str], advertised_scopes: str | None
-    ) -> None:
+    def _warn_for_unadvertised_oauth_scopes(self, requested_scopes: set[str], advertised_scopes: str | None) -> None:
         supported_scopes = set((advertised_scopes or "").split())
         if not supported_scopes:
             return
@@ -997,8 +995,7 @@ class JimmOperatorCharm(CharmBase):
             return
 
         logger.warning(
-            "OAuth provider did not advertise requested OAuth scopes %s; "
-            "JIMM will continue to request them",
+            "OAuth provider did not advertise requested OAuth scopes %s; " "JIMM will continue to request them",
             ", ".join(sorted(missing_scopes)),
         )
 

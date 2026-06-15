@@ -540,8 +540,7 @@ class TestCharm(TestCase):
         env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
         self.assertEqual(env["JIMM_OAUTH_SCOPES"], "email groups offline_access openid profile")
         logger_warning.assert_any_call(
-            "OAuth provider did not advertise requested OAuth scopes %s; "
-            "JIMM will continue to request them",
+            "OAuth provider did not advertise requested OAuth scopes %s; " "JIMM will continue to request them",
             "groups",
         )
 
