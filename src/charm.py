@@ -458,9 +458,13 @@ class JimmOperatorCharm(CharmBase):
             logger.warning("OAuth provider info is not ready yet")
             self.unit.status = BlockedStatus("Waiting for OAuth provider info")
             return
-        known_scopes = set(OAUTH_SCOPES.split(" "))
-        oauth_provider_scopes = set(oauth_provider_info.scope.split(" "))
-        scopes = " ".join(sorted(oauth_provider_scopes.intersection(known_scopes)))
+
+        requested_oauth_scopes = self._requested_oauth_scopes
+        self._warn_for_unadvertised_oauth_scopes(
+            requested_oauth_scopes,
+            oauth_provider_info.scope,
+        )
+        scopes = " ".join(sorted(requested_oauth_scopes))
 
         try:
             session_key = self.model.get_secret(label=SESSION_KEY_SECRET_LABEL).get_content()[SESSION_KEY_LOOKUP]
@@ -508,8 +512,10 @@ class JimmOperatorCharm(CharmBase):
             "JIMM_MACAROON_EXPIRY_DURATION": self.config.get("macaroon-expiry-duration", "24h"),
             "JIMM_OAUTH_CLIENT_ID": oauth_provider_info.client_id,
             "JIMM_OAUTH_CLIENT_SECRET": oauth_provider_info.client_secret,
+            "JIMM_OAUTH_CLIENT_CREDENTIAL_SCOPES": self.config.get("oauth-client-credential-scopes", ""),
             "JIMM_OAUTH_ISSUER_URL": oauth_provider_info.issuer_url,
             "JIMM_OAUTH_SCOPES": scopes,
+            "JIMM_OAUTH_GROUP_CLAIM_KEY": self.config.get("oauth-group-claim-key"),
             "JIMM_SECURE_SESSION_COOKIES": self.config.get("secure-session-cookies"),
             "JIMM_SESSION_COOKIE_MAX_AGE": self.config.get("session-cookie-max-age"),
             "JIMM_SESSION_SECRET_KEY": session_key,
@@ -974,10 +980,36 @@ class JimmOperatorCharm(CharmBase):
         dns = ensureAbsoluteURL(dns)
         return ClientConfig(
             redirect_uri=urljoin(dns, "auth/callback"),
-            scope=OAUTH_SCOPES,
+            scope=" ".join(sorted(self._requested_oauth_scopes)),
             grant_types=OAUTH_GRANT_TYPES,
             token_endpoint_auth_method="client_secret_post",
         )
+
+    def _warn_for_unadvertised_oauth_scopes(self, requested_scopes: set[str], advertised_scopes: str | None) -> None:
+        supported_scopes = set((advertised_scopes or "").split())
+        if not supported_scopes:
+            return
+
+        missing_scopes = requested_scopes - supported_scopes
+        if not missing_scopes:
+            return
+
+        logger.warning(
+            "OAuth provider did not advertise requested OAuth scopes %s; " "JIMM will continue to request them",
+            ", ".join(sorted(missing_scopes)),
+        )
+
+    @property
+    def _requested_oauth_scopes(self) -> set[str]:
+        """
+        This function populates the scopes for JIMM to use WITHOUT any provider validation from the
+        openid configuration endpoint.
+
+        It appends optional scopes to the default OAUTH_SCOPES.
+        """
+        scopes = set(OAUTH_SCOPES.split())
+        scopes.update(str(self.config.get("oauth-optional-scopes", "")).split())
+        return scopes
 
     def get_vault_nonce(self) -> str:
         secret = self.model.get_secret(label=VAULT_NONCE_SECRET_LABEL)

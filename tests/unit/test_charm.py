@@ -520,6 +520,54 @@ class TestCharm(TestCase):
         env = plan_dict.get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
         self.assertDictEqual(env, env | expected_values)
 
+    def test_oidc_extra_scopes_requested_when_configured(self):
+        self.start_minimal_jimm()
+
+        self.harness.update_relation_data(
+            self.oauth_rel_id,
+            "hydra",
+            {
+                "scope": "email offline_access openid profile",
+            },
+        )
+        self.harness.update_config({"oauth-optional-scopes": "groups"})
+
+        container = self.harness.model.unit.get_container("jimm")
+        with mock.patch("src.charm.logger.warning") as logger_warning:
+            self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
+        self.assertEqual(env["JIMM_OAUTH_SCOPES"], "email groups offline_access openid profile")
+        logger_warning.assert_any_call(
+            "OAuth provider did not advertise requested OAuth scopes %s; " "JIMM will continue to request them",
+            "groups",
+        )
+
+    def test_oidc_group_claim_key_rendered_when_configured(self):
+        self.start_minimal_jimm()
+
+        self.harness.update_config({"oauth-group-claim-key": "groups"})
+
+        container = self.harness.model.unit.get_container("jimm")
+        self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
+        self.assertEqual(env["JIMM_OAUTH_GROUP_CLAIM_KEY"], "groups")
+
+    def test_oauth_client_credential_scopes_rendered_when_configured(self):
+        self.start_minimal_jimm()
+
+        self.harness.update_config({"oauth-client-credential-scopes": "groups profile"})
+
+        container = self.harness.model.unit.get_container("jimm")
+        self.harness.charm.on.jimm_pebble_ready.emit(container)
+
+        plan = self.harness.get_container_pebble_plan("jimm")
+        env = plan.to_dict().get("services", {}).get(JIMM_SERVICE_NAME, {}).get("environment", {})
+        self.assertEqual(env["JIMM_OAUTH_CLIENT_CREDENTIAL_SCOPES"], "groups profile")
+
     def test_ssh_config(self):
         self.start_minimal_jimm()
         self.harness.update_config(
