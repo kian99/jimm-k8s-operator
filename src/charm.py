@@ -458,9 +458,13 @@ class JimmOperatorCharm(CharmBase):
             logger.warning("OAuth provider info is not ready yet")
             self.unit.status = BlockedStatus("Waiting for OAuth provider info")
             return
-        known_scopes = self._requested_oauth_scopes
-        oauth_provider_scopes = set(oauth_provider_info.scope.split(" "))
-        scopes = " ".join(sorted(oauth_provider_scopes.intersection(known_scopes)))
+
+        requested_oauth_scopes = self._requested_oauth_scopes
+        self._warn_for_unadvertised_oauth_scopes(
+            requested_oauth_scopes,
+            oauth_provider_info.scope,
+        )
+        scopes = " ".join(sorted(requested_oauth_scopes))
 
         try:
             session_key = self.model.get_secret(label=SESSION_KEY_SECRET_LABEL).get_content()[SESSION_KEY_LOOKUP]
@@ -981,10 +985,33 @@ class JimmOperatorCharm(CharmBase):
             token_endpoint_auth_method="client_secret_post",
         )
 
+    def _warn_for_unadvertised_oauth_scopes(
+        self, requested_scopes: set[str], advertised_scopes: str | None
+    ) -> None:
+        supported_scopes = set((advertised_scopes or "").split())
+        if not supported_scopes:
+            return
+
+        missing_scopes = requested_scopes - supported_scopes
+        if not missing_scopes:
+            return
+
+        logger.warning(
+            "OAuth provider did not advertise requested OAuth scopes %s; "
+            "JIMM will continue to request them",
+            ", ".join(sorted(missing_scopes)),
+        )
+
     @property
     def _requested_oauth_scopes(self) -> set[str]:
+        """
+        This function populates the scopes for JIMM to use WITHOUT any provider validation from the
+        openid configuration endpoint.
+
+        It appends optional scopes to the default OAUTH_SCOPES.
+        """
         scopes = set(OAUTH_SCOPES.split())
-        scopes.update(str(self.config.get("auth-optional-scopes", "")).split())
+        scopes.update(str(self.config.get("oauth-optional-scopes", "")).split())
         return scopes
 
     def get_vault_nonce(self) -> str:

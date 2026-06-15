@@ -71,31 +71,29 @@ options:
     description: |
       This is the claim name to be extracted from the OAuth access token that contains
       the user groups.
-      This is only relevant if the operator has configured group mapping for the OIDC protocol at
-      the identity provider. 
+      This is only useful if the identity provider is configured to map group information onto access tokens. 
       
-      If the mapper is not set as a default scope, then it must also be 
-      included in "auth-optional-scopes" and for client credentials, within "oauth-client-credential-scopes".
-
+      If group information is not set as a default scope in the identity provider, then it must also be 
+      included in the charm config's "oauth-optional-scopes" and "oauth-client-credential-scopes".
+      
       When this configuration key is unset, no group scopes are requested.
-
       Permissions for the groups can be set via the JIMM plugin for the Juju CLI.
   oauth-client-credential-scopes:
     type: string
     default: ""
     description: |
       Space separated OAuth scopes requested only for the client credentials flow.
-      These scopes are passed to JIMM via JIMM_OAUTH_CLIENT_CREDENTIAL_SCOPES.
-  auth-optional-scopes:
+      Specifying additional scopes here will require that service accounts used to authenticate to
+      JIMM will require these additional scopes at creation time.
+  oauth-optional-scopes:
     type: string
     default: ""
     description: |
-      Space separated optional OAuth scopes to request and forward when supported by the identity provider, 
-      in addition to any default scopes set by the provider. These scopes are only applied to the authorisation
-      code and device code flows.
+      Space separated extra OAuth scopes to request and forward, in addition to JIMM's default OAuth
+      scope request. These scopes are only applied to the authorisation code and device code flows.
 
-      This is useful for requesting scopes that are not included by default, such as a group claim
-      mapper scope.
+      This is useful for requesting scopes that the identity provider supports but may omit from
+      advertised metadata, such as a group claim scope.
   session-expiry-duration:
     type: string
     default: 6h
