@@ -1051,17 +1051,6 @@ class JimmOperatorCharm(CharmBase):
 
         ca_certs = self.trusted_cert_transfer.get_all_certificates()
 
-        # deal with v0 relations
-        cert_transfer_integrations = self.trusted_cert_transfer.charm.model.relations[
-            CERTIFICATE_TRANSFER_INTEGRATION_NAME
-        ]
-
-        for integration in cert_transfer_integrations:
-            ca = {integration.data[unit]["ca"] for unit in integration.units if "ca" in integration.data.get(unit, {})}
-            ca_certs.update(ca)
-
-        ca_bundle = "\n".join(ca_certs)
-
         if not ca_certs:
             logger.info("No trusted CA certificates found, skipping update.")
             return False
